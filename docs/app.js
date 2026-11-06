@@ -1,53 +1,408 @@
 'use strict';
-const T=Tonari,$=s=>document.querySelector(s),app=$('#app');
-const state={records:[],requests:[],step:1,draft:{situation:'',method:'',fields:[],values:{}},active:null,edit:null,signs:[],buzzer:false};
-const methods=['友人/家族と合流','タクシー移動','警備会社への同行相談','安全地点で待機','学校/職場に共有'];
-const fields=['現在地','目的地','相談理由','過去の記録','相手情報','緊急連絡先'];
-const e=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const id=()=>crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;
-const btn=(label,action,cls='primary',extra='')=>`<button type="button" class="${cls}" data-action="${action}" ${extra}>${label}</button>`;
-const heading=(k,title,sub='')=>`<div class="eyebrow">${k}</div><h1>${title}</h1>${sub?`<p class="muted">${sub}</p>`:''}`;
-const empty=(text,action,label)=>`<div class="card empty"><p>${text}</p>${action?btn(label,action):''}</div>`;
-const note='<p class="footer-note">このアプリだけで襲撃を防ぐことはできません。支援への接続を試すプロトタイプです。入力は再読み込みで消えます。実在する個人情報は入力しないでください。</p>';
-function toast(text){$('#toast').textContent=text;$('#toast').style.display='block';clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('#toast').style.display='none',4000);}
-function modal(title,body){$('#dialog-content').innerHTML=`<h2>${title}</h2>${body}`;$('#dialog').showModal();}
-$('#close-dialog').onclick=()=>$('#dialog').close();
-function go(route){if(location.hash==='#'+route)render();else location.hash=route;}
-function current(){return state.requests.find(r=>r.id===state.active)||state.requests.at(-1);}
-const strokes={home:'M3 11 12 3l9 8v10h-6v-7H9v7H3Z',support:'M4 19c0-8 14-1 14-10 M15 5l3-3 3 3 M6 16a3 3 0 1 0 .01 0',records:'M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h5',status:'M12 3a9 9 0 1 0 .01 0 M12 7v5l4 2',emergency:'M12 3 2 20h20Z M12 9v4 M12 16v.3',arrow:'m9 5 7 7-7 7',risk:'M3 12h4l3-7 4 14 3-7h4',report:'M5 3h10l4 4v14H5z M8 11h8 M8 15h6',staff:'M8 4h8v4H8z M7 6H4v15h16V6h-3 M8 13h8 M8 17h6'};
-function ico(k){return '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="'+strokes[k]+'"/></svg>';}
-function navigation(route){const active=({record:'records',report:'records',risk:'home'})[route]||route;$('#nav').innerHTML=[['home','ホーム'],['support','帰宅支援'],['emergency','いま危ない'],['status','依頼状況'],['records','記録']].map(([r,l])=>`<a href="#${r}" class="nav-${r}" ${active===r?'aria-current="page"':''}>${ico(r)}${l}</a>`).join('');}
-function render(){const route=location.hash.slice(1)||'home';navigation(route);state.buzzer=false;app.innerHTML=({home,emergency,support,status,staff,records,record:recordForm,report:reportPage,risk:riskPage}[route]||home)()+note;app.focus({preventScroll:true});window.scrollTo(0,0);}
-function home(){
- const task=(k,label,desc,action,cl='')=>`<button class="task-row ${cl}" data-action="${action}"><span class="tile-icon">${ico(k)}</span><span><strong>${label}</strong><small>${desc}</small></span><span class="chev">${ico('arrow')}</span></button>`;
- const r=current();return `<section class="night"><div><span class="night-kicker">となりの帰宅サポート</span><h1>危ない日に、<br>1人で帰らせない。</h1></div><svg class="town" viewBox="0 0 220 120" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M145 12a14 14 0 1 0 16 19 17 17 0 0 1-16-19Z" fill="#ffe3a5"/><path d="M2 106h216M15 105V72l19-13 19 13v33M24 104V86h12v18M58 105V54h34v51M66 65h5m8 0h5m-18 12h5m8 0h5M98 105V81l16-12 16 12v24M146 105V67q0-9 9-9h8M158 59l-4 7h14l-5-7M179 105V79h28v26M175 79l18-14 18 14M188 105V92h9v13"/><path d="M18 37h6m-3-3v6m79-13h5m-2.5-2.5v5"/></g></svg></section>
- ${task('emergency','いま危ない','110番の案内・待機先を確認','emergency','urgent')}
- ${r?`<button class="request-strip" data-action="status">依頼状況：${e(r.status)}　→</button>`:''}
- <h2 class="group-title">いま、できること</h2><section class="hub-list">${task('support','帰宅サポートを使う','合流・タクシー・待機を相談する','support')}${task('records','記録する','覚えている出来事を書き留める','new-record')}</section>
- <h2 class="group-title">相談の準備</h2><section class="hub-list compact">${task('risk','気になる状況を整理する','あてはまる状況から次の行動を考える','risk')}${task('report','相談レポートを作る','記録を相談先に合わせてまとめる','report')}</section>
- <div class="desk-link"><a href="#staff">${ico('staff')} 支援担当デモを開く →</a></div>`;}
-function emergency(){return heading('EMERGENCY','いま、危険を感じているとき','入力や依頼の完了を待つ必要はありません。')+`<section class="card alert"><h2>緊急の場合は、電話アプリから110番へ</h2><p>この画面からは発信されません。実際の緊急通報は、ご自身の電話で行ってください。</p>${btn('110番 · 発信手順を表示（デモ）','call','danger-btn full')}</section><div class="grid"><section class="card"><h2>連絡先に知らせる</h2><p class="muted">デモの文面を確認します。誰にも送信されません。</p>${btn('緊急連絡先共有デモ','contact','secondary full')}</section><section class="card"><h2>いまいる場所を知らせる</h2><p class="muted">架空の場所で表示します。位置情報を取得しません。</p>${btn('現在地共有デモ','location','secondary full')}</section></div><section class="card mt" id="buzzer-card"><h2>防犯ブザー風デモ</h2><p class="muted">表示のみの体験です。音・振動は出ません。</p>${btn('ブザー表示を開始','buzzer','secondary full')}<p id="buzzer-status" role="status"></p></section><section class="card soft"><span class="eyebrow">WAITING PLACE</span><h2 class="mt">安全地点への待機案内</h2><p>無理に帰宅を続けず、近くの有人施設・駅の窓口・交番など、助けを求められる場所での待機を検討してください。移動が難しい場合は、その場から緊急の連絡を。</p><p class="muted">施設の営業・人員・受け入れ可否は未確認です。特定の場所の状況を保証する案内ではありません。</p>${btn('待機・合流を相談する','support','primary full')}</section><p class="muted">緊急でない警察への相談：#9110 または最寄りの警察署。<a href="https://www.npa.go.jp/goiken_index.html" target="_blank" rel="noopener noreferrer">警察庁の案内 ↗</a></p>`;}
-function support(){const d=state.draft;let html=heading('RETURN HOME SUPPORT','帰宅サポート','実際の支援者・事業者にはつながりません。依頼の流れを体験できます。')+`<ol class="steps">${['状況','支援方法','共有・確認'].map((s,i)=>`<li class="${state.step===i+1?'active':''}">${i+1}. ${s}</li>`).join('')}</ol><form id="support-form">`;
- if(state.step===1)html+=`<section class="card"><h2>いまの状況に近いものは？</h2>${['帰り道に不安・違和感がある','つきまとい・待ち伏せがある','脅し・接近など、切迫した危険がある','うまく説明できない・その他'].map(s=>`<label class="choice"><input type="radio" name="situation" required value="${s}" ${d.situation===s?'checked':''}><span>${s}</span></label>`).join('')}<p class="muted">切迫した危険がある場合は、依頼の手続きより緊急連絡を優先してください。</p>${btn('緊急画面へ','emergency','danger-btn')}</section><button class="primary full">支援方法を選ぶ →</button>`;
- if(state.step===2)html+=`<section class="card"><h2>どのような支援を希望しますか？</h2>${methods.map(s=>`<label class="choice"><input type="radio" required name="method" value="${s}" ${d.method===s?'checked':''}><span>${s}</span></label>`).join('')}<p class="muted">依頼は受け入れや手配を保証しません。費用・対応地域・時間は、本運用時の確認事項です。</p></section><div class="row">${btn('戻る','support-back','secondary','type="button"')}<button class="primary">共有範囲を選ぶ →</button></div>`;
- if(state.step===3)html+=`<section class="card"><h2>共有してよい情報だけを選ぶ</h2><p class="muted">初期状態はすべて非共有。選択した項目だけが支援担当のデモ画面に表示されます。ここには架空の内容を入力してください。</p>${fields.map((s,i)=>`<label class="choice"><input type="checkbox" name="share" value="${s}" ${d.fields.includes(s)?'checked':''}><span>${s}${s==='過去の記録'?`<small>依頼作成時の全${state.records.length}件・全項目を共有（相手情報・証拠メモも含む）。元の記録を削除しても共有コピーは残ります</small>`:''}</span></label>${s!=='過去の記録'?`<label class="field share-value" data-field="${s}" ${d.fields.includes(s)?'':'hidden'}>${s}の共有内容（架空の情報）<input name="value${i}" maxlength="500" value="${e(d.values[s]||'')}" placeholder="未記入でも依頼できます"></label>`:''}`).join('')}</section><section class="card soft"><h2>依頼内容の確認</h2><dl><dt>状況</dt><dd>入力済み（「相談理由」を選択しない限り共有しません）</dd><dt>支援方法</dt><dd>${e(d.method)}</dd><dt>共有先</dt><dd>支援担当（デモ）</dd></dl><p class="muted">共有項目に加えて、依頼ID・支援方法・ステータス・作成時刻が表示されます。「相談理由」選択時は選択した状況も共有されます。</p></section><div class="row">${btn('戻る','support-back','secondary','type="button"')}<button class="primary">この内容でデモ依頼を作成</button></div>`;
- return html+'</form>';}
-function summary(r){return `<dl><dt>依頼ID</dt><dd>${e(r.id.slice(0,8))}</dd><dt>支援方法</dt><dd>${e(r.method)}</dd><dt>作成日時</dt><dd>${e(r.time)}</dd></dl><h3>共有を選択した情報</h3>${r.fields.length?`<dl>${r.fields.map(k=>`<dt>${k}</dt><dd>${k==='過去の記録'?r.sharedRecords.length+'件（依頼作成時のコピー）':e(r.shared[k]||'未記入')}</dd>`).join('')}</dl>`:'<p class="muted">共有項目はありません。</p>'}${r.fields.includes('過去の記録')?r.sharedRecords.map(r=>`<details><summary>${e(r.date||'日時不明')} · ${e(r.type)}</summary><dl>${[['場所',r.place],['内容',r.content],['回数',r.count||'不明'],['証拠メモ',r.evidence],['目撃者',r.witness],['相手情報',r.person],['危険度','レベル'+r.level]].map(([k,v])=>`<dt>${k}</dt><dd>${e(v||'未記入')}</dd>`).join('')}</dl></details>`).join(''):''}`;}
-function requestPicker(){return state.requests.length>1?`<label class="field">表示する依頼<select id="request-picker">${state.requests.map(r=>`<option value="${r.id}" ${current()?.id===r.id?'selected':''}>${e(r.method)} · ${e(r.id.slice(0,8))}</option>`).join('')}</select></label>`:'';}
-function status(){const r=current();return heading('REQUEST STATUS','依頼状況','すべてデモの進行表示です。実際の手配・合流は発生しません。')+(!r?empty('まだ依頼はありません。','support','帰宅サポートを使う'):requestPicker()+`<section class="card ${r.status===T.statuses[8]?'alert':'soft'}"><span class="badge">${e(r.id.slice(0,8))}</span><h2 class="mt">${r.status}</h2><p>${r.status===T.statuses[8]?'今回のデモ依頼は手配不成立です。待ち続けず、別の支援方法や緊急連絡を検討してください。':r.status===T.statuses[7]?'到着のデモが完了しました。状況に変化があれば、引き続き相談につながれます。':'現時点では支援や手配の完了を意味しません。危険を感じるときは、更新を待たず緊急連絡へ。'}</p>${r.status===T.statuses[8]?`<p>理由：${e(r.history.at(-1).reason)}</p>`:''}<div class="row">${btn('いま危ない','emergency','danger-btn')}${btn('別の支援を相談する','new-support','secondary')}</div></section><div class="grid"><section class="card"><h2>進行の流れ</h2><ol class="timeline">${T.statuses.slice(0,8).map(s=>`<li class="${r.history.some(h=>h.status===s)?'done':''} ${s===r.status?'current':''}">${s}</li>`).join('')}</ol>${r.status===T.statuses[8]?'<span class="badge red">手配不成立</span>':''}</section><section class="card"><h2>今回の共有内容</h2>${summary(r)}<h3 class="mt">更新履歴</h3>${r.history.map(h=>`<p class="muted">${e(h.time)}<br>${h.status}${h.reason?' · '+e(h.reason):''}</p>`).join('')}</section></div><p class="muted mt">進行の体験は下の「支援担当デモ」画面でステータスを更新してください。</p>${btn('支援担当デモを開く','staff','secondary')}`);}
-function staff(){const r=current();return heading('SUPPORT DESK / DEMO','支援担当画面','役割切り替えのデモです。認証・担当者への通知は実装していません。')+(!r?empty('確認する依頼はありません。','support','依頼を作成する'):requestPicker()+`<div class="grid"><section class="card"><div class="row space"><h2>依頼内容</h2><span class="badge">${r.status}</span></div>${summary(r)}</section><div><section class="card"><h2>ステータス更新</h2>${T.allowed(r.status).length?`<form id="status-form"><label class="field">次のステータス<select name="next" id="next-status">${T.allowed(r.status).map(s=>`<option>${s}</option>`).join('')}</select></label><label class="field">手配不成立の理由（不成立時は必須）<textarea name="reason" maxlength="1000" placeholder="例：対応できる担当者が見つからない"></textarea></label><button class="primary full">ステータスを更新</button></form>`:'<p>この依頼は終了しています。再依頼は新しい依頼として作成してください。</p>'}</section><section class="card"><h2>担当メモ</h2><p class="muted">この画面だけに表示します。メモは共有範囲の追加や変更を行いません。</p><form id="memo-form"><label class="field">メモを追加<textarea name="memo" required maxlength="1000"></textarea></label><button class="secondary full">メモを追加する</button></form>${r.memos.map(m=>`<p class="record-content">${e(m.text)}<br><small>${e(m.time)}</small></p>`).join('')}</section></div></div>`);}
-function records(){return heading('YOUR RECORDS','被害の記録','うまくまとめなくても大丈夫。分かることだけ、記録できます。')+`<div class="row">${btn('＋ 記録を追加','new-record')}${btn('相談レポートを生成','report','secondary')}</div><p class="muted">このセッション内のみの保存です。画面を閉じる・再読み込みすると消えます。</p>`+(state.records.length?state.records.map(r=>`<article class="card"><div class="row space"><span class="badge ${r.level==='3'?'red':''}">レベル${r.level} · ${T.riskNames[r.level]}</span><small>${e((r.date||'日時不明').replace('T',' '))}</small></div><h2 class="mt">${e(r.type)}${r.place?' · '+e(r.place):''}</h2><p class="record-content">${e(r.content)}</p><div class="row">${btn('編集','edit-record','secondary',`data-id="${r.id}"`)}${btn('削除','delete-record','quiet',`data-id="${r.id}"`)}</div></article>`).join(''):empty('まだ記録はありません。入力はいつでも始められます。'));}
-function recordForm(){const r=state.records.find(r=>r.id===state.edit)||{level:'1',type:'つきまとい'};const field=(key,label,type='text')=>`<label class="field">${label}<input name="${key}" type="${type}" value="${e(r[key]||'')}" ${type==='number'?'min="1" max="100000" step="1"':'maxlength="500"'}></label>`;return heading('ADD A RECORD',state.edit?'記録を編集する':'覚えていることを残す','不明な項目は空欄にできます。日時は日本時間で入力してください。')+`<form id="record-form"><section class="card"><div class="grid"><div>${field('date','日時（不明なら空欄）','datetime-local')}${field('place','場所')}${field('person','相手情報（誰が・不明なら空欄）')}</div><div><label class="field">種別<select name="type">${['つきまとい','待ち伏せ','連絡・メッセージ','脅し','侵入・接近','その他'].map(s=>`<option ${r.type===s?'selected':''}>${s}</option>`).join('')}</select></label>${field('count','行為の回数（不明なら空欄）','number')}<label class="field">本人が感じる危険度<select name="level">${[1,2,3].map(n=>`<option value="${n}" ${Number(r.level)===n?'selected':''}>レベル${n}：${T.riskNames[n]}</option>`).join('')}</select></label></div></div><label class="field">内容（何をされた・見聞きしたこと）*<textarea name="content" required maxlength="5000" placeholder="事実と推測を分けて、覚えている言葉や行動を記入できます。">${e(r.content||'')}</textarea></label><label class="field">証拠メモ<textarea name="evidence" maxlength="2000" placeholder="例：メッセージの日時と保存場所。ファイルのアップロードはありません。">${e(r.evidence||'')}</textarea></label>${field('witness','目撃者（不明なら空欄）')}<p class="muted">この入力は法的判断や専門家による危険評価ではありません。記録のために相手へ接触する必要はありません。</p></section><div class="row"><button class="primary">記録を保存</button>${btn('キャンセル','records','secondary','type="button"')}</div></form>`;}
-function reportPage(){return heading('CONSULTATION REPORT','相談のために、事実を整理する','入力された記録だけで作成します。外部AI・相談先への送信はありません。')+(!state.records.length?empty('レポートに含める記録がありません。','new-record','記録を追加する'):`<div class="card no-print"><label class="field">相談先<select id="report-target">${['警察','弁護士','学校','職場'].map(s=>`<option>${s}</option>`).join('')}</select></label><p class="muted">現在の全${state.records.length}件を含みます。画面で内容を確認してから書き出してください。レポートには機微な情報が含まれます。</p><div class="row">${btn('テキストを保存','download-report')}${btn('印刷 / PDF','print','secondary')}</div></div><pre class="report" id="report-text">${e(T.report(state.records,'警察'))}</pre>`);}
-function riskPage(){const n=T.risk(state.signs);return heading('SITUATION CHECK','気になる状況を整理する','簡易ルールによるデモです。専門的な危険評価や将来の予測ではありません。')+`<section class="card"><h2>当てはまる状況を選んでください</h2>${[['unease','不安・違和感がある'],['following','繰り返しつきまとい・待ち伏せがある'],['threat','脅し、身体への危害、侵入などがある']].map(([v,l])=>`<label class="choice"><input type="checkbox" name="risk" value="${v}" ${state.signs.includes(v)?'checked':''}>${l}</label>`).join('')}<p class="muted">複数選択時は最も高いレベルを表示します。選択しない場合は判定しません。</p></section><section class="card ${n===3?'alert':'soft'}" aria-live="polite"><span class="eyebrow">目安 · 診断ではありません</span><h2 class="mt">${n?'レベル'+n+'：'+T.riskNames[n]:'状況は未選択です'}</h2><p>${n===3?'依頼や記録を待たず、緊急連絡を検討してください。':n===2?'ひとりでの移動を避ける支援や、警察への相談を検討できます。':'不安の大きさにかかわらず、支援を求めることができます。'}</p><p class="muted">表示が低いレベルでも、危険がないことを意味しません。判断できない状況や急な変化もあります。</p><div class="row">${btn('いま危ない','emergency','danger-btn')}${btn('帰宅サポートを使う','support','secondary')}</div></section>`;}
-function saveDraft(){const f=$('#support-form');if(!f)return;const fd=new FormData(f);if(state.step===1)state.draft.situation=fd.get('situation')||'';if(state.step===2)state.draft.method=fd.get('method')||'';if(state.step===3){state.draft.fields=fd.getAll('share');fields.forEach((k,i)=>{if(k!=='過去の記録')state.draft.values[k]=fd.get('value'+i)||'';});}}
-document.addEventListener('submit',ev=>{ev.preventDefault();const f=ev.target,fd=new FormData(f);if(f.id==='support-form'){saveDraft();if(state.step<3){state.step++;render();return;}const d=state.draft,shared={};d.fields.forEach(k=>{if(k!=='過去の記録')shared[k]=d.values[k]||'';});if(d.fields.includes('相談理由'))shared['相談理由']=d.situation+(shared['相談理由']?'\n'+shared['相談理由']:'');const time=new Date().toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'});const r={id:id(),time,method:d.method,fields:[...d.fields],shared,sharedRecords:d.fields.includes('過去の記録')?structuredClone(state.records):[],status:T.statuses[0],history:[{status:T.statuses[0],time}],memos:[]};state.requests.push(r);state.active=r.id;state.step=1;state.draft={situation:'',method:'',fields:[],values:{}};go('status');toast('デモ依頼を作成しました。外部送信はありません。');}
- if(f.id==='record-form'){const r=Object.fromEntries(fd);if(!r.content.trim()){toast('内容を入力してください。');return;}r.id=state.edit||id();const idx=state.records.findIndex(x=>x.id===r.id);if(idx>=0)state.records[idx]=r;else state.records.push(r);state.edit=null;go('records');toast('このセッション内に記録しました。');}
- if(f.id==='status-form'){try{T.transition(current(),fd.get('next'),fd.get('reason'));render();toast('デモのステータスを更新しました。');}catch(error){toast(error.message);}}
- if(f.id==='memo-form'){const text=fd.get('memo').trim();if(!text)return;current().memos.push({text,time:new Date().toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})});render();toast('メモを追加しました。');}});
-document.addEventListener('change',ev=>{const el=ev.target;if(el.name==='share'){saveDraft();document.querySelectorAll('.share-value').forEach(x=>{x.hidden=!state.draft.fields.includes(x.dataset.field);});}if(el.id==='request-picker'){state.active=el.value;render();}if(el.id==='report-target')$('#report-text').textContent=T.report(state.records,el.value);if(el.name==='risk'){state.signs=[...document.querySelectorAll('[name=risk]:checked')].map(x=>x.value);const value=el.value;render();document.querySelector(`[name=risk][value="${value}"]`).focus({preventScroll:true});}});
-document.addEventListener('click',ev=>{const b=ev.target.closest('[data-action]');if(!b)return;const a=b.dataset.action;if(['home','emergency','support','status','staff','records','report','risk'].includes(a)){saveDraft();go(a);return;}if(a==='new-support'){state.step=1;state.draft={situation:'',method:'',fields:[],values:{}};go('support');}if(a==='support-back'){saveDraft();state.step--;render();}if(a==='new-record'){state.edit=null;go('record');}if(a==='edit-record'){state.edit=b.dataset.id;go('record');}if(a==='delete-record'){modal('この記録を削除しますか？',`<p>元に戻すことはできません。作成済み依頼に共有したコピーは残ります。</p>${btn('記録を削除する','confirm-delete','danger-btn',`data-id="${b.dataset.id}"`)}`);}if(a==='confirm-delete'){state.records=state.records.filter(r=>r.id!==b.dataset.id);$('#dialog').close();render();toast('記録を削除しました。');}if(a==='call')modal('110番への連絡手順', '<p><strong>このデモは発信しません。</strong></p><p>実際に緊急通報する場合は、ご自身の電話アプリで「110」を入力して発信してください。場所、何が起きているか、相手の様子など、分かることを伝えてください。</p>');if(a==='contact')modal('緊急連絡先への共有デモ','<span class="badge">プレビューのみ · 未送信</span><p>宛先：デモ連絡先（架空）</p><p>「いま帰宅に不安があります。電話や合流の相談をしたいです。」</p><p class="muted">連絡先にはアクセスしていません。実際の連絡は普段お使いの連絡手段から行ってください。</p>');if(a==='location')modal('現在地共有デモ','<span class="badge">架空の位置 · 未送信</span><p>デモ駅・有人の案内窓口付近</p><p class="muted">位置情報の取得・追跡・外部送信は行っていません。</p>');if(a==='buzzer'){state.buzzer=!state.buzzer;b.textContent=state.buzzer?'ブザー表示を停止':'ブザー表示を開始';$('#buzzer-card').classList.toggle('buzzer-on',state.buzzer);$('#buzzer-status').textContent=state.buzzer?'ブザー動作の表示中（無音・振動なし）':'停止しました';}if(a==='download-report'){modal('レポートをファイルに保存',`<p>全記録の相手情報・証拠メモなどを含むテキストを、この端末のダウンロード先に保存します。共有端末では保存先に注意してください。</p>${btn('内容を確認したので保存する','confirm-download')}`);}if(a==='confirm-download'){const text=$('#report-text').textContent;const url=URL.createObjectURL(new Blob(['\uFEFF'+text],{type:'text/plain;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download='となり-相談レポート.txt';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('#dialog').close();}if(a==='print')window.print();});
-$('#quick-exit').onclick=()=>{if($('#dialog').open)$('#dialog').close();document.body.hidden=true;const cover=document.createElement('div');cover.className='hidden-screen';cover.innerHTML='<h1>メモ</h1><p>今日は、どんな一日でしたか。</p><button class="secondary">元の画面に戻る</button><p class="muted">この表示切り替えは、履歴や入力内容を消去しません。</p>';document.documentElement.append(cover);document.title='メモ';cover.querySelector('button').onclick=()=>{cover.remove();document.body.hidden=false;document.title='となり — 帰宅・移動の支援デモ';$('#quick-exit').focus();};cover.querySelector('button').focus();};
-window.addEventListener('hashchange',render);render();
+const T = Tonari;
+const $ = selector => document.querySelector(selector);
+const app = $('#app');
+const shell = $('#shell');
+const dlg = $('#dialog');
+const cover = $('#cover');
+const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const blankDraft = () => ({situation:'',method:'',fields:[],values:{}});
+const state = {records:[], requests:[], step:1, draft:blankDraft(), active:null, edit:null, signs:[], buzzer:false, reportTo:'警察'};
+const methods = ['友人/家族と合流','タクシー移動','警備会社への同行相談','安全地点で待機','学校/職場に共有'];
+const situations = ['帰り道に不安・違和感がある','つきまとい・待ち伏せがある','脅し・接近など、切迫した危険がある','うまく説明できない・その他'];
+const stages = ['状況','支援方法','共有範囲','内容確認'];
+const sections = {home:'サポートホーム',support:'帰宅サポート',emergency:'緊急案内',status:'依頼状況',staff:'支援担当デモ',records:'被害記録',record:'記録の入力',report:'相談レポート',risk:'状況の整理'};
+const icons = {
+  home:'<path d="m3 10 9-7 9 7v10h-6v-6H9v6H3z"/>',
+  support:'<circle cx="6" cy="18" r="2.7"/><circle cx="18" cy="6" r="2.7"/><path d="M8.8 18h3a3.6 3.6 0 0 0 0-7.2H11a2.4 2.4 0 0 1 0-4.8h4"/>',
+  emergency:'<path d="m12 3 9.7 16.6a.9.9 0 0 1-.8 1.4H3.1a.9.9 0 0 1-.8-1.4L12 3Z"/><path d="M12 8v5.2m0 3.6v.2"/>',
+  status:'<circle cx="12" cy="12" r="9"/><path d="M12 6.6v5.6l3.6 2.2"/>',
+  records:'<path d="M5 4h10m-10 0v16h14v-8M8 16h4m-2.2-3.4 1.2-3.3 7.4-7.1 2.1 2.1-7.3 7.2-3.4 1.1Z"/>',
+  report:'<path d="M5 3h9l5 5v13H5zM14 3v6h5M8 13h8m-8 4h6"/>',
+  risk:'<path d="M4 4h16v12H9l-5 4V4Z"/><path d="M9.5 8.3a2.5 2.5 0 0 1 5 .1c0 1.4-2.5 1.6-2.5 3m0 2.1v.1"/>',
+  staff:'<rect x="3" y="6" width="18" height="14" rx="2"/><path d="M9 6V3h6v3M3 12h18m-11 0v2h4v-2"/>',
+  arrow:'<path d="m9 5.5 6.5 6.5L9 18.5"/>',
+  next:'<path d="M4 12h15m-6-6 6 6-6 6"/>',
+  back:'<path d="M19 12H4m6-6-6 6 6 6"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v.2"/>',
+  calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-13 4h2m3 0h2"/>',
+  stack:'<rect x="4" y="6" width="16" height="14" rx="1.5"/><path d="M7 3h10M8 11h8m-8 4h5"/>',
+  person:'<circle cx="12" cy="7.5" r="3.2"/><path d="M5 20v-2a7 7 0 0 1 14 0v2"/>',
+  pin:'<path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 0 1 14 0Z"/><circle cx="12" cy="10" r="2.4"/>',
+  phone:'<path d="m7 3 3 5-2.5 2.2c1.3 2.9 3.4 5.1 6.2 6.3L16 14l5 3c-.4 3.5-2.2 4.6-5.6 3.7A18.4 18.4 0 0 1 3.3 8.6C2.4 5.2 3.5 3.4 7 3Z"/>',
+  sound:'<path d="M3 10h4l5-5v14l-5-5H3zM16 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/>',
+  check:'<path d="m5 12 4.5 4.5L19 7"/>',
+  list:'<path d="M8 6h12M8 12h12M8 18h12m-16-12h.5m-.5 6h.5m-.5 6h.5"/>',
+  file:'<path d="M6 3h9l4 4v14H6zM15 3v5h4M9 12h7m-7 4h5"/>',
+  guide:'<path d="M3 5c4-1 6-.5 9 1.2C15 4.5 17 4 21 5v14c-4-1-6-.5-9 1.2C9 18.5 7 18 3 19zM12 6.2v14"/>'
+};
+function ico(name) {
+  return `<svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${icons[name]||''}</svg>`;
+}
+const button=(label,action,cls='primary',attrs='')=>`<button type="button" class="${cls}" data-action="${action}" ${attrs}>${label}</button>`;
+const link=(label,route,cls='secondary')=>`<a href="#${route}" class="${cls}">${label}</a>`;
+const stamp=()=> crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+const current=()=>state.requests.find(r=>r.id===state.active)||state.requests.at(-1);
+const activeRequests=()=>state.requests.filter(r=>T.allowed(r.status).length);
+const homeRequest=()=>activeRequests().at(-1)||state.requests.at(-1);
+const dayText=()=>new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'long',day:'numeric',weekday:'short'}).format(new Date());
+const optional='<span class="field-tag">任意</span>';
+const required='<span class="field-tag required">必須</span>';
+const notice=(text,kind='info')=>`<div class="notice ${kind}">${ico(kind==='warning'?'emergency':'info')}<p>${text}</p></div>`;
+const rows=(pairs,cls='')=>`<dl class="data-rows ${cls}">${pairs.map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v||'未記入')}</dd></div>`).join('')}</dl>`;
+const title=(label,sub='')=>`<div class="page-title"><div><h1>${label}</h1>${sub?`<p>${sub}</p>`:''}</div></div>`;
+const empty=(icon,h,p,action='')=>`<section class="panel empty"><span class="empty-icon">${ico(icon)}</span><h2>${h}</h2><p>${p}</p>${action}</section>`;
+function nav(route) {
+  const active=({record:'records',report:'records',risk:'home'})[route]||route;
+  const items=[['home','ホーム'],['support','帰宅支援'],['emergency','いま危ない'],['status','依頼状況'],['records','記録']];
+  $('#nav').innerHTML=`<div class="nav-inner">${items.map(([k,v])=>`<a href="#${k}" class="nav-item nav-${k}" ${k===active?'aria-current="page"':''}>${ico(k)}<span>${v}</span></a>`).join('')}</div>`;
+}
+function render() {
+  const hash=location.hash.slice(1);
+  const route=Object.hasOwn(sections,hash)?hash:'home';
+  nav(route);
+  state.buzzer=false;
+  app.dataset.route=route;
+  app.innerHTML=({home,emergency,support,status,staff,records,record:recordForm,report:reportPage,risk:riskPage})[route]();
+  if(cover.hidden) {
+    document.title=`${sections[route]}｜となり（体験版）`;
+    app.focus({preventScroll:true}); window.scrollTo(0,0);
+  }
+}
+function go(route) {
+  if(location.hash==='#'+route) render(); else location.hash=route;
+}
+function toast(text) {
+  const out=$('#toast');
+  out.textContent=text; out.hidden=false;
+  clearTimeout(toast.timer); toast.timer=setTimeout(()=>{out.hidden=true;},4200);
+}
+function modal(label,html) {
+  $('#dialog-title').textContent=label;
+  $('#dialog-content').innerHTML=html;
+  dlg.showModal();
+}
+function guide() {
+  modal('体験版と情報の取り扱い',`<p>「となり」は帰宅や移動の支援、相談の準備を試すプロトタイプです。アプリ単体で襲撃を防ぐことはできません。</p>
+    ${rows([['利用目的','架空の情報での操作体験'],['入力の保存先','開いているタブ内。再読み込み・終了で消去'],['担当画面','同じタブ内のデモ画面。実際の担当者への通知なし'],['外部連携','通報・配車・同行手配・位置情報送信は行いません']])}
+    <h3>知っておいていただきたいこと</h3>
+    <ul class="plain-list"><li>この体験版に実在する個人情報は入力しないでください。カメラ・マイク・位置情報は使用しません。</li><li>「画面を隠す」は表示だけを切り替えます。履歴や入力内容は消えません。</li><li>自分で書き出したレポートや印刷物は、タブを閉じても残ります。</li></ul>`);
+}
+function engraved() {
+  const lines=Array.from({length:18},(_,i)=>{
+    const n=i*4.5;
+    return `<path d="M${-15+n} 205 C${45+n} 163 ${99+n} 182 ${122+n} 90 S${188+n} 5 ${254+n} -32"/>`;
+  }).join('');
+  return `<svg class="engraving" viewBox="0 0 320 185" fill="none" aria-hidden="true" preserveAspectRatio="xMaxYMid slice"><g stroke="currentColor" stroke-width="1.15">${lines}</g></svg>`;
+}
+function home() {
+  const r=homeRequest(), active=activeRequests().length;
+  const service=(icon,label,desc,action)=>button(`<span class="service-top"><span class="service-icon">${ico(icon)}</span>${ico('arrow')}</span><strong>${label}</strong><small>${desc}</small>`,action,'service-tile');
+  const tool=(icon,label,sub,route)=>`<a class="menu-line" href="#${route}"><span class="line-icon">${ico(icon)}</span><span><b>${label}</b><small>${sub}</small></span>${ico('arrow')}</a>`;
+  return `<div class="home-title"><div><h1>サポートホーム</h1></div><span class="home-date">${ico('calendar')}${esc(dayText())}</span></div>
+    <div class="dashboard">
+      <div class="dashboard-main">
+        <section class="overview" aria-label="このタブの利用状況">
+          ${engraved()}
+          <div class="overview-body"><div class="overview-label"><i></i>支援の利用状況</div>
+          <h2>${r?esc(r.status):'依頼はまだありません'}</h2>
+          <p>${r?`照会番号 ${esc(r.id.slice(0,8).toUpperCase())}　·　デモ依頼`:'帰宅サポートを利用すると、ここで進み具合を確認できます。'}</p></div>
+          <div class="metrics">
+            ${button(`<span>進行中の依頼</span><strong>${active}<small>件</small></strong>${ico('arrow')}`,'home-status','metric')}
+            <a href="#records" class="metric"><span>被害記録</span><strong>${state.records.length}<small>件</small></strong>${ico('arrow')}</a>
+          </div>
+        </section>
+        <a class="urgent-entry" href="#emergency"><span class="urgent-icon">${ico('emergency')}</span><span><strong>いま危ない</strong><small>110番の案内・待機先を確認</small></span><span class="urgent-open">緊急案内 ${ico('arrow')}</span></a>
+        <section class="services"><h2 class="section-title">帰宅支援・記録</h2><div class="service-grid">
+          ${service('support','帰宅サポートを使う','合流・移動・待機を相談','support')}
+          ${service('records','記録する','覚えている出来事を入力','new-record')}
+        </div></section>
+      </div>
+      <aside class="dashboard-side">
+        <section><h2 class="section-title">相談の準備</h2><div class="menu-panel">
+          ${tool('risk','気になる状況を整理','状況に応じた行動の目安','risk')}
+          ${tool('report','相談レポートを作成','記録を時系列でまとめる','report')}
+        </div></section>
+        <section class="handling-panel"><div class="handling-h">${ico('guide')}<h2>情報の取り扱い</h2></div>
+          <p>入力はこのタブ内だけで扱います。再読み込みすると消えます。</p>
+          ${button(`詳しく見る ${ico('arrow')}`,'guide','text-button')}</section>
+        <a class="staff-link" href="#staff">${ico('staff')} 支援担当デモを開く ${ico('arrow')}</a>
+      </aside>
+    </div>`;
+}
+function emergency() {
+  const actionRow=(k,h,s,a)=>button(`<span class="line-icon">${ico(k)}</span><span><b>${h}</b><small>${s}</small></span>${ico('arrow')}`,a,'menu-line');
+  return `${title('緊急案内','依頼や記録の入力を待つ必要はありません。')}
+    <section class="panel emergency-lead"><div class="label danger-text">${ico('phone')} 緊急時の連絡</div>
+      <h2>電話アプリから <span class="dial-number">110</span> 番へ</h2><p>この体験版からは発信できません。実際の緊急通報には、ご自身の電話をお使いください。</p>
+      ${button(`110番の発信手順を見る ${ico('arrow')}`,'call','danger-btn')}</section>
+    <div class="two-col"><section class="panel"><h2 class="panel-title">助けを求めて待機する</h2><p>無理に帰宅を続けず、駅の窓口や交番など、人に助けを求められる場所での待機を検討してください。</p><p class="muted">施設の営業・人員・受け入れ状況は確認していません。</p>${link('待機・合流を相談する','support','secondary')}</section>
+    <section><h2 class="section-title">緊急操作のデモ</h2><div class="menu-panel">${actionRow('person','緊急連絡先共有デモ','送信前の文面を確認','contact')}${actionRow('pin','現在地共有デモ','架空の場所を表示','location')}
+      <div class="buzzer" id="buzzer-card">${button(`<span class="line-icon">${ico('sound')}</span><span><b id="buzzer-label">防犯ブザー風デモを開始</b><small>無音・振動なしの動作表示</small></span>${ico('arrow')}`,'buzzer','menu-line','aria-pressed="false"')}<p id="buzzer-status" role="status" hidden></p></div></div></section></div>
+    <div class="panel consultation-note"><h2 class="panel-title">緊急でない警察への相談</h2><p>警察相談専用電話 <b>#9110</b> または最寄りの警察署へ。<a href="https://www.npa.go.jp/goiken_index.html" target="_blank" rel="noopener noreferrer">警察庁の案内（外部サイト）</a></p></div>`;
+}
 
+function stepRail() {
+  return `<div class="step-rail"><div class="rail-heading">手続きの流れ</div><ol class="steps" aria-label="手続きの進捗">${stages.map((s,i)=>{
+    const n=i+1,done=n<state.step;
+    return `<li class="${n===state.step?'here':done?'done':''}" ${n===state.step?'aria-current="step"':''}><span class="step-number">${done?ico('check'):String(n).padStart(2,'0')}</span><span>${s}</span></li>`;
+  }).join('')}</ol><p class="rail-foot">共有する情報は、依頼の作成前に確認・変更できます。</p></div>`;
+}
+function recordExcerpt(r) {
+  return `<details class="record-excerpt"><summary>${esc((r.date||'日時不明').replace('T',' '))}　${esc(r.type||'種別未選択')}</summary>${rows([
+    ['場所',r.place],['内容',r.content],['回数',r.count?`${r.count}回`:'不明'],['証拠メモ',r.evidence],['目撃者',r.witness],
+    ...(Object.hasOwn(r,'person')?[['相手情報',r.person]]:[]),['本人が感じた危険度',T.levelText(r.level)]
+  ])}</details>`;
+}
+function disclosureView(data) {
+  const hidden=T.fields.filter(k=>!data.fields.includes(k));
+  return `<div class="disclosure-result"><div class="subhead"><h3>表示する情報</h3><span class="tag">${data.fields.length} / ${T.fields.length} 項目</span></div>
+    ${data.fields.length?rows(data.fields.map(k=>[k,k==='過去の記録'?`${data.sharedRecords.length}件（依頼作成時点）`:data.shared[k]])):'<p class="inset">任意の共有項目はありません。</p>'}
+    ${data.sharedRecords.length?`<div class="excerpt-list"><p class="label">表示する記録の内訳</p>${data.sharedRecords.map(recordExcerpt).join('')}</div>`:''}
+    ${hidden.length?`<p class="excluded"><b>選択していない項目</b>　${hidden.map(esc).join('、')}</p>`:''}</div>`;
+}
+function shareEditor(d) {
+  const descriptions=['手入力した架空の場所','移動先として伝えたい場所','選択した状況と補足','依頼作成時点の記録のコピー','相手について伝えたいこと','デモ用の連絡先'];
+  return `<div class="subhead"><span class="label">担当画面に表示する情報</span><span class="tag" id="share-count" aria-live="polite">${d.fields.length} / 6 項目</span></div>
+    <p class="muted">すべて任意です。選ばなくても依頼を作成できます。</p>
+    <div class="choice-list">${T.fields.map((k,i)=>{
+      const selected=d.fields.includes(k);
+      const more=k==='過去の記録'
+        ? `<p class="share-extra" id="share-${i}" ${selected?'':'hidden'}>全${state.records.length}件の内容・証拠メモ・目撃者などをコピーします。記録の「相手情報」欄は「相手情報」も選んだ場合にのみ含まれます。自由記述内の名前などはそのままです。次の画面で内容を確認できます。</p>`
+        : `<label class="field share-extra" id="share-${i}" ${selected?'':'hidden'}>${k==='相談理由'?'選択した状況への補足':k+'の入力'} ${optional}<input name="value${i}" maxlength="500" value="${esc(d.values[k]||'')}" placeholder="架空の情報を入力"></label>`;
+      return `<div class="share-row"><label class="choice"><input type="checkbox" name="share" value="${k}" aria-controls="share-${i}" ${selected?'checked':''}><span><b>${k}</b><small>${descriptions[i]}</small></span></label>${more}</div>`;
+    }).join('')}</div>`;
+}
+function support() {
+  const d=state.draft,step=state.step;
+  const question=['いまの状況を選んでください','希望する支援を選んでください','共有する範囲を選んでください','依頼内容をご確認ください'][step-1];
+  const radios=(name,options,value)=>`<div class="choice-list">${options.map(x=>`<label class="choice"><input name="${name}" type="radio" required value="${esc(x)}" ${x===value?'checked':''}><span>${esc(x)}</span></label>`).join('')}</div>`;
+  let contents='';
+  if(step===1) contents=`<p class="muted">近いものを1つ選んでください。うまく説明できない場合も進めます。</p>${radios('situation',situations,d.situation)}<p class="hint">切迫した危険を感じる場合は、<a href="#emergency">緊急案内</a>を先に開けます。</p>`;
+  if(step===2) contents=`<p class="muted">この体験版では、実際の連絡や手配は行いません。</p>${radios('method',methods,d.method)}`;
+  if(step===3) contents=shareEditor(d);
+  if(step===4) contents=`<p class="muted">以下が、このタブ内の支援担当デモに表示される内容です。</p>
+    ${rows([['支援方法',d.method],['表示先','支援担当デモ（このタブ内）'],['外部への送信','なし']])}
+    ${disclosureView(T.disclosure(d,state.records))}
+    <p class="hint">作成時に照会番号・作成日時・ステータスが付きます。作成済みの明細はあとから変更できません。</p>`;
+  return `${title('帰宅サポート','合流・移動・待機の希望を選び、デモ依頼を作成します。')}
+    <div class="wizard-layout">${stepRail()}<form id="support-form" class="panel form-panel" autocomplete="off">
+    <fieldset><legend><span class="step-caption">STEP ${String(step).padStart(2,'0')} / 04</span><span>${question}</span></legend>${contents}</fieldset>
+    <div class="form-actions">${step>1?button(ico('back')+' 戻る','support-back','secondary'):link('ホームへ','home','secondary')}
+    <button class="primary" type="submit">${['支援方法を選ぶ','共有範囲を選ぶ','内容を確認する','この内容でデモ依頼を作成'][step-1]} ${ico(step===4?'check':'next')}</button></div>
+    ${step>=3?'<p class="input-reminder">体験用です。実在する個人情報は入力しないでください。</p>':''}</form></div>`;
+}
+function picker() {
+  return state.requests.length>1 ? `<label class="field request-picker">表示するデモ依頼<select id="request-picker">${[...state.requests].reverse().map(r=>`<option value="${esc(r.id)}" ${current()?.id===r.id?'selected':''}>${esc(r.id.slice(0,8).toUpperCase())} ｜ ${esc(r.method)} ｜ ${esc(r.status)}</option>`).join('')}</select></label>` : '';
+}
+function requestBasics(r) {
+  return rows([['照会番号',r.id.slice(0,8).toUpperCase()],['支援方法',r.method],['作成日時',`${r.time}（日本時間）`],['表示先','支援担当デモ（このタブ内）']]);
+}
+function history(r) {
+  return `<ol class="history-list" aria-label="依頼の更新履歴">${[...r.history].reverse().map((h,i)=>`<li class="${i===0?'latest':''}"><div class="history-node"></div><div><span class="history-time">${esc(h.time)}</span><div class="history-line"><b>${esc(h.status)}</b>${i===0?'<span class="tag">現在</span>':''}</div>${h.reason?`<p class="user-text">${esc(h.reason)}</p>`:''}</div></li>`).join('')}</ol>`;
+}
+function status() {
+  const r=current();
+  const start=title('依頼状況','照会番号ごとに、デモ依頼の進捗と共有内容を確認できます。');
+  if(!r) return start+empty('status','依頼はまだありません','帰宅サポートで作成した依頼が、ここに表示されます。',link('帰宅サポートを使う','support','primary'));
+  const failed=r.status===T.statuses[8], ended=r.status===T.statuses[7];
+  const msg=failed?'手配は成立していません。別の支援方法を選ぶか、必要に応じて緊急案内へ進んでください。':ended?'このデモ依頼は終了しました。新しい依頼を作成できます。':'これはデモの進行状況です。危険を感じるときは、状態の更新を待つ必要はありません。';
+  return `${start}${picker()}<section class="receipt-head ${failed?'failed':''}"><div><div class="label">現在のステータス<span class="tag">デモ</span></div><h2>${esc(r.status)}</h2><p>${msg}</p>${failed?`<p class="user-text"><b>不成立の理由：</b>${esc(r.history.at(-1).reason)}</p>`:''}</div>
+    <div class="receipt-stub"><span>照会番号</span><strong>${esc(r.id.slice(0,8).toUpperCase())}</strong><small>最終更新（日本時間） <br>${esc(r.history.at(-1).time)}</small></div></section>
+    <div class="detail-layout"><section class="panel"><h2 class="panel-title">依頼明細</h2>${requestBasics(r)}${disclosureView(r)}</section>
+    <div><section class="panel"><h2 class="panel-title">更新履歴 <span class="tag">${r.history.length}件</span></h2>${history(r)}<details class="flow-details"><summary>ステータスの流れを見る</summary><ol>${T.statuses.slice(0,8).map(s=>`<li>${s}</li>`).join('')}</ol><p class="muted">途中で手配不成立になる場合もあります。</p></details></section>
+    <div class="panel"><h2 class="panel-title">次の操作</h2><div class="stack-buttons">${link('支援担当デモを開く','staff','secondary')}${button('別の支援を相談する','new-support','secondary')}${link('いま危ない','emergency','danger-outline')}</div></div></div></div>`;
+}
+function staff() {
+  const r=current();
+  const start=title('支援担当デモ','同じタブで担当者の操作を体験できます。実際の担当者には通知されません。');
+  if(!r) return start+empty('staff','確認する依頼はありません','依頼が作成されると、選択された情報だけが表示されます。',link('デモ依頼を作成する','support','primary'));
+  const next=T.allowed(r.status);
+  return `${start}${picker()}<div class="detail-layout"><section class="panel"><div class="subhead"><h2 class="panel-title">依頼内容</h2><span class="tag">${esc(r.status)}</span></div>${requestBasics(r)}${disclosureView(r)}${link('利用者側の依頼明細へ','status','text-link')}</section>
+    <div><section class="panel"><h2 class="panel-title">ステータス更新</h2>${next.length?`<form id="status-form" autocomplete="off"><label class="field">次のステータス<select name="next">${next.map(s=>`<option>${s}</option>`).join('')}</select></label><label class="field" id="reason-field" hidden>手配不成立の理由 ${required}<textarea name="reason" maxlength="1000" placeholder="例：対応できる担当者が見つからない"></textarea></label><button class="primary full">ステータスを更新</button></form>`:'<p>終了済みのため、ステータスは変更できません。</p>'}</section>
+    <section class="panel"><h2 class="panel-title">担当メモ</h2><p class="muted">利用者側の依頼明細には表示されません。</p><form id="memo-form" autocomplete="off"><label class="field">新しいメモ<textarea name="memo" required maxlength="1000"></textarea></label><button class="secondary full">メモを追加する</button></form>${[...r.memos].reverse().map(m=>`<div class="memo-item"><small>${esc(m.time)}</small><p class="user-text">${esc(m.text)}</p></div>`).join('')}</section></div></div>`;
+}
 
+function records() {
+  return `${title('被害記録','分かることだけ、覚えている言葉で記録できます。')}
+    <div class="toolbar"><span class="count-label">このタブの記録 <b>${state.records.length}</b> 件</span><div class="row">${button('記録を追加する','new-record','primary')}${link('相談レポートへ','report','secondary')}</div></div>
+    ${notice('入力は再読み込み・タブ終了で消えます。架空の情報でお試しください。')}
+    ${state.records.length?`<div class="record-list">${[...state.records].reverse().map(r=>`<article class="panel record-item"><div class="subhead"><span class="label">${ico('calendar')}${esc((r.date||'日時未記入').replace('T',' '))}</span><span class="tag ${r.level==='3'?'attention':''}">${esc(T.levelText(r.level))}</span></div><h2>${esc(r.type||'種別未選択')}${r.place?' ｜ '+esc(r.place):''}</h2><p class="user-text">${esc(r.content)}</p>
+      <div class="record-actions">${button('編集','edit-record','secondary',`data-id="${esc(r.id)}"`)}${button('削除','delete-record','quiet',`data-id="${esc(r.id)}"`)}</div></article>`).join('')}</div>`:
+      empty('records','記録はまだありません','追加した記録は一覧で確認でき、相談レポートにまとめられます。')}`;
+}
+function recordForm() {
+  const r=state.records.find(x=>x.id===state.edit)||{};
+  const textField=(key,label,kind='text',hint='')=>`<label class="field">${label} ${optional}<input name="${key}" type="${kind}" value="${esc(r[key]||'')}" ${kind==='number'?'min="1" max="100000" step="1"':kind==='text'?'maxlength="500"':''} ${hint?`placeholder="${esc(hint)}"`:''}></label>`;
+  const types=['つきまとい','待ち伏せ','連絡・メッセージ','脅し','侵入・接近','その他'];
+  return `${title(state.edit?'記録を編集する':'記録する','覚えている内容から入力してください。不明な項目は空欄のまま残せます。')}
+    <form id="record-form" class="entry-form" autocomplete="off">
+      ${notice('架空の情報でお試しください。この記録を追加しても外部には送信されません。')}
+      <section class="panel"><h2 class="panel-title">出来事の内容</h2><label class="field">見聞きしたこと ${required}<textarea name="content" required maxlength="5000" placeholder="例：駅の改札を出た後、同じ人が後ろを歩いていた。">${esc(r.content||'')}</textarea></label>
+      <div class="form-grid">${textField('date','日時（日本時間）','datetime-local')}${textField('place','場所')}<label class="field">種別 ${optional}<select name="type"><option value="">未選択</option>${types.map(k=>`<option ${r.type===k?'selected':''}>${k}</option>`).join('')}</select></label>${textField('count','行為の回数','number','不明なら空欄')}</div></section>
+      <section class="panel"><h2 class="panel-title">補足情報</h2><div class="form-grid">${textField('person','相手情報')}${textField('witness','目撃者')}</div><label class="field">証拠メモ ${optional}<textarea name="evidence" maxlength="2000" placeholder="例：メッセージの日時と保存場所。ファイルの添付はありません。">${esc(r.evidence||'')}</textarea></label>
+      <label class="field">本人が感じた危険度 ${optional}<select name="level"><option value="">未選択</option>${[1,2,3].map(n=>`<option value="${n}" ${Number(r.level)===n?'selected':''}>${esc(T.levelText(n))}</option>`).join('')}</select></label><p class="hint">本人の選択を記録する項目です。危険を予測したり、法的判断を行ったりするものではありません。</p></section>
+      <div class="form-actions">${link('キャンセル','records','secondary')}<button class="primary">このタブに記録を保存 ${ico('check')}</button></div>
+    </form>`;
+}
+function reportPage() {
+  const start=title('相談レポート','「いつ・どこで・誰が・何を・何回」を、入力した記録から整理します。');
+  if(!state.records.length) return start+empty('report','レポートに含める記録がありません','記録を1件追加すると、内容を確認してから書き出せます。',button('記録を追加する','new-record'));
+  return `${start}<div class="report-layout"><section class="panel no-print"><h2 class="panel-title">出力内容</h2>
+    <label class="field">相談先<select id="report-target">${['警察','弁護士','学校','職場'].map(k=>`<option ${state.reportTo===k?'selected':''}>${k}</option>`).join('')}</select></label>
+    ${rows([['対象','このタブの全記録 '+state.records.length+'件'],['送信','相談先への送信はありません']])}<p class="hint">相手情報や証拠メモを含みます。保存・印刷する前に、プレビューの内容を確認してください。</p>
+    <div class="stack-buttons">${button('テキストを保存','download-report')}${button('印刷 / PDF','print','secondary')}</div></section>
+    <section class="panel report-panel"><h2 class="panel-title">レポートのプレビュー</h2><pre id="report-text">${esc(T.report(state.records,state.reportTo))}</pre></section></div>`;
+}
+function riskResult() {
+  const n=T.risk(state.signs);
+  const advice=n===3?'切迫した危険を感じるときは、依頼や記録より緊急連絡を優先してください。':n===2?'ひとりでの移動を避ける支援や、警察への相談を検討できます。':'表示されるレベルにかかわらず、支援を求めることができます。';
+  return `<div class="label">選択した状況の目安</div><h2>${n?esc(T.levelText(n)):'まだ選択されていません'}</h2><p>${advice}</p><p class="muted">低いレベルでも危険がないことを意味しません。専門家による評価ではありません。</p>`;
+}
+function riskPage() {
+  return `${title('気になる状況を整理','当てはまるものを選ぶと、次の行動を考えるための目安を表示します。')}
+    <div class="two-col"><section class="panel"><fieldset><legend>当てはまる状況</legend><p class="muted">複数選択できます。未選択では判定しません。</p><div class="choice-list">
+    ${[['unease','不安・違和感がある'],['following','繰り返しつきまとい・待ち伏せがある'],['threat','脅し・身体への危害・侵入がある']].map(([v,s])=>`<label class="choice"><input type="checkbox" name="risk" value="${v}" ${state.signs.includes(v)?'checked':''}><span>${s}</span></label>`).join('')}</div></fieldset></section>
+    <section class="panel risk-output"><div id="risk-result" aria-live="polite">${riskResult()}</div><div class="stack-buttons">${link('いま危ない','emergency','danger-outline')}${link('帰宅サポートを使う','support','primary')}</div></section></div>`;
+}
+
+function saveDraft() {
+  const f=$('#support-form');
+  if(!f) return;
+  const fd=new FormData(f),d=state.draft;
+  if(state.step===1) d.situation=fd.get('situation')||'';
+  if(state.step===2) d.method=fd.get('method')||'';
+  if(state.step===3) {
+    d.fields=fd.getAll('share');
+    T.fields.forEach((k,i)=>{if(k!=='過去の記録') d.values[k]=fd.get('value'+i)||'';});
+  }
+}
+function showHiddenScreen() {
+  if(dlg.open) dlg.close();
+  $('#toast').hidden=true;
+  shell.hidden=true; cover.hidden=false; document.title='メモ'; $('#unhide').focus();
+}
+$('#unhide').onclick=()=>{
+  cover.hidden=true; shell.hidden=false;
+  document.title=`${sections[app.dataset.route]}｜となり（体験版）`;
+  $('#quick-exit').focus({preventScroll:true});
+};
+$('#skip').onclick=ev=>{ev.preventDefault();app.focus();};
+document.addEventListener('input',ev=>{
+  const el=ev.target;
+  if(el.form?.id==='support-form') saveDraft();
+  if(typeof el.setCustomValidity==='function') el.setCustomValidity('');
+});
+document.addEventListener('change',ev=>{
+  const el=ev.target;
+  if(el.form?.id==='support-form') {
+    saveDraft();
+    if(el.name==='share') {
+      T.fields.forEach((k,i)=>{$('#share-'+i).hidden=!state.draft.fields.includes(k);});
+      $('#share-count').textContent=`${state.draft.fields.length} / 6 項目`;
+    }
+  }
+  if(el.name==='next') {
+    const failed=el.value===T.statuses[8];
+    $('#reason-field').hidden=!failed;
+    el.form.elements.reason.required=failed;
+    if(!failed) {el.form.elements.reason.value='';el.form.elements.reason.setCustomValidity('');}
+  }
+  if(el.id==='request-picker') {state.active=el.value;render();}
+  if(el.id==='report-target') {
+    state.reportTo=el.value; $('#report-text').textContent=T.report(state.records,state.reportTo);
+  }
+  if(el.name==='risk') {
+    state.signs=[...document.querySelectorAll('[name=risk]:checked')].map(c=>c.value);
+    $('#risk-result').innerHTML=riskResult();
+  }
+});
+function nonBlank(input,message) {
+  if(input.value.trim()) return true;
+  input.setCustomValidity(message); input.reportValidity(); return false;
+}
+document.addEventListener('submit',ev=>{
+  ev.preventDefault();
+  const f=ev.target, fd=new FormData(f);
+  switch(f.id) {
+    case 'support-form': {
+      saveDraft();
+      if(state.step<4) {state.step+=1;render();return;}
+      const d=state.draft;
+      if(!situations.includes(d.situation)||!methods.includes(d.method)) {
+        state.step=!situations.includes(d.situation)?1:2;render();return;
+      }
+      const time=T.now(),status=T.statuses[0];
+      const r={id:stamp(),method:d.method,time,status,...T.disclosure(d,state.records),history:[{time,status}],memos:[]};
+      f.querySelector('[type=submit]').disabled=true;
+      state.requests.push(r); state.active=r.id; state.step=1; state.draft=blankDraft();
+      go('status'); toast('デモ依頼を作成しました。外部には送信していません。');
+      break;
+    }
+    case 'record-form': {
+      if(!nonBlank(f.elements.content,'見聞きした内容を入力してください。')) return;
+      const r=Object.fromEntries(fd);
+      r.id=state.edit||stamp();
+      const index=state.records.findIndex(x=>x.id===r.id);
+      if(index<0) state.records.push(r); else state.records[index]=r;
+      state.edit=null; go('records'); toast('このタブ内に記録しました。'); break;
+    }
+    case 'status-form': {
+      const next=fd.get('next');
+      if(next===T.statuses[8]&&!nonBlank(f.elements.reason,'手配不成立の理由を入力してください。')) return;
+      try {T.transition(current(),next,fd.get('reason')||''); render();toast('デモ依頼のステータスを更新しました。');}
+      catch(error) {toast(error.message);}
+      break;
+    }
+    case 'memo-form': {
+      if(!nonBlank(f.elements.memo,'メモを入力してください。')) return;
+      current().memos.push({text:fd.get('memo').trim(),time:T.now()}); render();toast('担当メモを追加しました。');
+      break;
+    }
+  }
+});
+document.addEventListener('click',ev=>{
+  const b=ev.target.closest('[data-action]');
+  if(!b) return;
+  switch(b.dataset.action) {
+    case 'support': go('support');break;
+    case 'guide': guide();break;
+    case 'hide': showHiddenScreen();break;
+    case 'dismiss': dlg.close();break;
+    case 'home-status': state.active=homeRequest()?.id||null;go('status');break;
+    case 'new-support': state.step=1;state.draft=blankDraft();go('support');break;
+    case 'support-back': saveDraft();state.step=Math.max(1,state.step-1);render();break;
+    case 'new-record': state.edit=null;go('record');break;
+    case 'edit-record': state.edit=b.dataset.id;go('record');break;
+    case 'delete-record':
+      modal('この記録を削除しますか？',`<p>記録一覧から削除され、元に戻せません。作成済みの依頼に含めたコピーと、書き出したファイルは残ります。</p>${button('記録を削除する','confirm-delete','danger-btn full',`data-id="${esc(b.dataset.id)}"`)}`);break;
+    case 'confirm-delete':
+      state.records=state.records.filter(r=>r.id!==b.dataset.id);
+      dlg.close();render();toast('このタブの記録一覧から削除しました。');break;
+    case 'call':
+      modal('110番への連絡手順',`<p class="inset"><b>この画面からは発信しません。</b></p><ol class="plain-list"><li>ご自身の電話アプリを開きます。</li><li>「110」を入力して発信してください。</li><li>場所と、いま起きていることを、分かる範囲で伝えてください。</li></ol>`);break;
+    case 'contact':
+      modal('緊急連絡先共有デモ',`<p class="tag">プレビューのみ・未送信</p>${rows([['宛先','架空の連絡先'],['文面','いま帰宅に不安があります。電話や合流の相談をしたいです。']])}<p class="muted">連絡先にはアクセスしていません。実際の連絡には普段の連絡手段をお使いください。</p>`);break;
+    case 'location':
+      modal('現在地共有デモ',`<p class="tag">架空の場所・未送信</p>${rows([['表示例','デモ駅の有人窓口付近']])}<p>端末の位置情報は取得・追跡・送信していません。</p>`);break;
+    case 'buzzer': {
+      state.buzzer=!state.buzzer;
+      b.setAttribute('aria-pressed',String(state.buzzer));
+      $('#buzzer-label').textContent=state.buzzer?'ブザー表示を停止':'防犯ブザー風デモを開始';
+      $('#buzzer-status').hidden=false;
+      $('#buzzer-status').textContent=state.buzzer?'デモ表示中です。音・振動は出ません。':'停止しました。';break;
+    }
+    case 'download-report':
+      modal('レポートの保存',`<p>全${state.records.length}件の内容・相手情報・証拠メモなどを含むテキストを、この端末に保存します。保存したファイルは、タブを閉じても残ります。</p>${button('内容を確認して保存する','confirm-download','primary full')}`);break;
+    case 'confirm-download': {
+      const source=$('#report-text');
+      if(!source) return;
+      const url=URL.createObjectURL(new Blob(['\uFEFF'+source.textContent],{type:'text/plain;charset=utf-8'}));
+      const a=document.createElement('a');a.href=url;a.download='となり-相談レポート.txt';a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);dlg.close();break;
+    }
+    case 'print': window.print();break;
+  }
+});
+window.addEventListener('hashchange',()=>{if(dlg.open) dlg.close();render();});
+render();
