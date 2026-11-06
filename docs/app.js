@@ -11,10 +11,11 @@ const state = {records:[], requests:[], step:1, draft:blankDraft(), active:null,
 const methods = ['友人/家族と合流','タクシー移動','警備会社への同行相談','安全地点で待機','学校/職場に共有'];
 const situations = ['帰り道に不安・違和感がある','つきまとい・待ち伏せがある','脅し・接近など、切迫した危険がある','うまく説明できない・その他'];
 const stages = ['状況','支援方法','共有範囲','内容確認'];
-const sections = {home:'サポートホーム',support:'帰宅サポート',emergency:'緊急案内',status:'依頼状況',staff:'支援担当デモ',records:'被害記録',record:'記録の入力',report:'相談レポート',risk:'状況の整理'};
+const sections = {home:'ホーム',menu:'その他のメニュー',support:'帰宅サポート',emergency:'緊急案内',status:'依頼状況',staff:'支援担当デモ',records:'被害記録',record:'記録の入力',report:'相談レポート',risk:'状況の整理'};
 const icons = {
   home:'<path d="m3 10 9-7 9 7v10h-6v-6H9v6H3z"/>',
-  support:'<circle cx="6" cy="18" r="2.7"/><circle cx="18" cy="6" r="2.7"/><path d="M8.8 18h3a3.6 3.6 0 0 0 0-7.2H11a2.4 2.4 0 0 1 0-4.8h4"/>',
+  support:'<circle cx="8.3" cy="8.2" r="3.3"/><path d="M2.5 20v-1.5a5.8 5.8 0 0 1 11.6 0V20M15 5.3a3.25 3.25 0 1 1 0 6.4m1.2 2.7a5.6 5.6 0 0 1 5.3 5.6"/>',
+  menu:'<rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.5"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.5"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.5"/><rect x="14" y="14" width="6.5" height="6.5" rx="1.5"/>',
   emergency:'<path d="m12 3 9.7 16.6a.9.9 0 0 1-.8 1.4H3.1a.9.9 0 0 1-.8-1.4L12 3Z"/><path d="M12 8v5.2m0 3.6v.2"/>',
   status:'<circle cx="12" cy="12" r="9"/><path d="M12 6.6v5.6l3.6 2.2"/>',
   records:'<path d="M5 4h10m-10 0v16h14v-8M8 16h4m-2.2-3.4 1.2-3.3 7.4-7.1 2.1 2.1-7.3 7.2-3.4 1.1Z"/>',
@@ -43,9 +44,6 @@ const button=(label,action,cls='primary',attrs='')=>`<button type="button" class
 const link=(label,route,cls='secondary')=>`<a href="#${route}" class="${cls}">${label}</a>`;
 const stamp=()=> crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 const current=()=>state.requests.find(r=>r.id===state.active)||state.requests.at(-1);
-const activeRequests=()=>state.requests.filter(r=>T.allowed(r.status).length);
-const homeRequest=()=>activeRequests().at(-1)||state.requests.at(-1);
-const dayText=()=>new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'long',day:'numeric',weekday:'short'}).format(new Date());
 const optional='<span class="field-tag">任意</span>';
 const required='<span class="field-tag required">必須</span>';
 const notice=(text,kind='info')=>`<div class="notice ${kind}">${ico(kind==='warning'?'emergency':'info')}<p>${text}</p></div>`;
@@ -53,9 +51,11 @@ const rows=(pairs,cls='')=>`<dl class="data-rows ${cls}">${pairs.map(([k,v])=>`<
 const title=(label,sub='')=>`<div class="page-title"><div><h1>${label}</h1>${sub?`<p>${sub}</p>`:''}</div></div>`;
 const empty=(icon,h,p,action='')=>`<section class="panel empty"><span class="empty-icon">${ico(icon)}</span><h2>${h}</h2><p>${p}</p>${action}</section>`;
 function nav(route) {
-  const active=({record:'records',report:'records',risk:'home'})[route]||route;
-  const items=[['home','ホーム'],['support','帰宅支援'],['emergency','いま危ない'],['status','依頼状況'],['records','記録']];
-  $('#nav').innerHTML=`<div class="nav-inner">${items.map(([k,v])=>`<a href="#${k}" class="nav-item nav-${k}" ${k===active?'aria-current="page"':''}>${ico(k)}<span>${v}</span></a>`).join('')}</div>`;
+  const navigation=$('#nav');
+  navigation.hidden=route==='home';
+  shell.classList.toggle('on-home',navigation.hidden);
+  const items=[['home','ホーム'],['emergency','いま危ない'],['menu','メニュー']];
+  navigation.innerHTML=`<div class="nav-inner">${items.map(([k,v])=>`<a href="#${k}" class="nav-item nav-${k}" ${k===route?'aria-current="page"':''}>${ico(k)}<span>${v}</span></a>`).join('')}</div>`;
 }
 function render() {
   const hash=location.hash.slice(1);
@@ -63,7 +63,7 @@ function render() {
   nav(route);
   state.buzzer=false;
   app.dataset.route=route;
-  app.innerHTML=({home,emergency,support,status,staff,records,record:recordForm,report:reportPage,risk:riskPage})[route]();
+  app.innerHTML=({home,menu,emergency,support,status,staff,records,record:recordForm,report:reportPage,risk:riskPage})[route]();
   if(cover.hidden) {
     document.title=`${sections[route]}｜となり（体験版）`;
     app.focus({preventScroll:true}); window.scrollTo(0,0);
@@ -83,51 +83,45 @@ function modal(label,html) {
   dlg.showModal();
 }
 function guide() {
-  modal('体験版と情報の取り扱い',`<p>「となり」は帰宅や移動の支援、相談の準備を試すプロトタイプです。アプリ単体で襲撃を防ぐことはできません。</p>
+  modal('体験版と情報の取り扱い',`<p>「となり」は、ひとりで帰るのが不安なときの選択肢と、相談の準備を確認できる体験版です。</p>
+    <ul class="plain-list"><li><b>いま危ない</b>　110番のかけ方や、人に助けを求めて待機する方法を確認できます。</li>
+    <li><b>帰宅サポートを使う</b>　合流・タクシー・同行相談・待機などを選び、デモの依頼を作れます。</li>
+    <li><b>記録する</b>　起きたことを入力し、警察・弁護士・学校・職場に相談するためのレポートを作れます。</li></ul>
     ${rows([['利用目的','架空の情報での操作体験'],['入力の保存先','開いているタブ内。再読み込み・終了で消去'],['担当画面','同じタブ内のデモ画面。実際の担当者への通知なし'],['外部連携','通報・配車・同行手配・位置情報送信は行いません']])}
     <h3>知っておいていただきたいこと</h3>
     <ul class="plain-list"><li>この体験版に実在する個人情報は入力しないでください。カメラ・マイク・位置情報は使用しません。</li><li>「画面を隠す」は表示だけを切り替えます。履歴や入力内容は消えません。</li><li>自分で書き出したレポートや印刷物は、タブを閉じても残ります。</li></ul>`);
 }
-function engraved() {
-  const lines=Array.from({length:18},(_,i)=>{
-    const n=i*4.5;
-    return `<path d="M${-15+n} 205 C${45+n} 163 ${99+n} 182 ${122+n} 90 S${188+n} 5 ${254+n} -32"/>`;
-  }).join('');
-  return `<svg class="engraving" viewBox="0 0 320 185" fill="none" aria-hidden="true" preserveAspectRatio="xMaxYMid slice"><g stroke="currentColor" stroke-width="1.15">${lines}</g></svg>`;
-}
 function home() {
-  const r=homeRequest(), active=activeRequests().length;
-  const service=(icon,label,desc,action)=>button(`<span class="service-top"><span class="service-icon">${ico(icon)}</span>${ico('arrow')}</span><strong>${label}</strong><small>${desc}</small>`,action,'service-tile');
-  const tool=(icon,label,sub,route)=>`<a class="menu-line" href="#${route}"><span class="line-icon">${ico(icon)}</span><span><b>${label}</b><small>${sub}</small></span>${ico('arrow')}</a>`;
-  return `<div class="home-title"><div><h1>サポートホーム</h1></div><span class="home-date">${ico('calendar')}${esc(dayText())}</span></div>
-    <div class="dashboard">
-      <div class="dashboard-main">
-        <section class="overview" aria-label="このタブの利用状況">
-          ${engraved()}
-          <div class="overview-body"><div class="overview-label"><i></i>支援の利用状況</div>
-          <h2>${r?esc(r.status):'依頼はまだありません'}</h2>
-          <p>${r?`照会番号 ${esc(r.id.slice(0,8).toUpperCase())}　·　デモ依頼`:'帰宅サポートを利用すると、ここで進み具合を確認できます。'}</p></div>
-          <div class="metrics">
-            ${button(`<span>進行中の依頼</span><strong>${active}<small>件</small></strong>${ico('arrow')}`,'home-status','metric')}
-            <a href="#records" class="metric"><span>被害記録</span><strong>${state.records.length}<small>件</small></strong>${ico('arrow')}</a>
-          </div>
-        </section>
-        <a class="urgent-entry" href="#emergency"><span class="urgent-icon">${ico('emergency')}</span><span><strong>いま危ない</strong><small>110番の案内・待機先を確認</small></span><span class="urgent-open">緊急案内 ${ico('arrow')}</span></a>
-        <section class="services"><h2 class="section-title">帰宅支援・記録</h2><div class="service-grid">
-          ${service('support','帰宅サポートを使う','合流・移動・待機を相談','support')}
-          ${service('records','記録する','覚えている出来事を入力','new-record')}
-        </div></section>
-      </div>
-      <aside class="dashboard-side">
-        <section><h2 class="section-title">相談の準備</h2><div class="menu-panel">
-          ${tool('risk','気になる状況を整理','状況に応じた行動の目安','risk')}
-          ${tool('report','相談レポートを作成','記録を時系列でまとめる','report')}
-        </div></section>
-        <section class="handling-panel"><div class="handling-h">${ico('guide')}<h2>情報の取り扱い</h2></div>
-          <p>入力はこのタブ内だけで扱います。再読み込みすると消えます。</p>
-          ${button(`詳しく見る ${ico('arrow')}`,'guide','text-button')}</section>
-        <a class="staff-link" href="#staff">${ico('staff')} 支援担当デモを開く ${ico('arrow')}</a>
-      </aside>
+  const action = (icon, label, detail) =>
+    `<span class="action-icon">${ico(icon)}</span>
+     <span class="action-label"><strong>${label}</strong><small>${detail}</small></span>
+     ${ico('arrow')}`;
+  return `<h1 class="home-heading">帰り道が不安なときに</h1>
+    <div class="home-actions">
+      ${link(action('phone','いま危ない','110番のかけ方・待機先を確認'),'emergency','home-action action-urgent')}
+      ${link(action('support','帰宅サポートを使う','合流する相手や移動手段を選ぶ'),'support','home-action action-support')}
+      ${button(action('records','記録する','起きたことをメモして相談に備える'),'new-record','home-action action-record')}
+    </div>
+    <p class="home-demo">${ico('info')}<span>体験版では、実際の通報・共有・手配は行いません。</span></p>
+    <div class="home-more">${link(`${ico('menu')} その他のメニュー ${ico('arrow')}`,'menu','more-link')}</div>`;
+}
+function menu() {
+  const row = (icon, label, detail) =>
+    `<span class="line-icon">${ico(icon)}</span><span><b>${label}</b><small>${detail}</small></span>${ico('arrow')}`;
+  return `${title('その他のメニュー')}
+    <div class="menu-groups">
+      <section><h2 class="section-title">依頼と記録</h2><div class="menu-panel">
+        ${link(row('status','依頼状況を見る','デモ依頼の進み具合・共有内容'),'status','menu-line')}
+        ${link(row('records','記録一覧を見る','記録を見返す・編集する'),'records','menu-line')}
+      </div></section>
+      <section><h2 class="section-title">相談の準備</h2><div class="menu-panel">
+        ${link(row('risk','気になる状況を整理','状況に応じた行動の目安を確認'),'risk','menu-line')}
+        ${link(row('report','相談レポートを作る','警察・弁護士・学校・職場への相談用'),'report','menu-line')}
+      </div></section>
+      <section><h2 class="section-title">体験版について</h2><div class="menu-panel">
+        ${button(row('guide','利用案内','このアプリでできること・情報の取り扱い'),'guide','menu-line')}
+        ${link(row('staff','支援担当デモを開く','依頼の確認・ステータスの更新'),'staff','menu-line')}
+      </div></section>
     </div>`;
 }
 function emergency() {
@@ -365,11 +359,9 @@ document.addEventListener('click',ev=>{
   const b=ev.target.closest('[data-action]');
   if(!b) return;
   switch(b.dataset.action) {
-    case 'support': go('support');break;
     case 'guide': guide();break;
     case 'hide': showHiddenScreen();break;
     case 'dismiss': dlg.close();break;
-    case 'home-status': state.active=homeRequest()?.id||null;go('status');break;
     case 'new-support': state.step=1;state.draft=blankDraft();go('support');break;
     case 'support-back': saveDraft();state.step=Math.max(1,state.step-1);render();break;
     case 'new-record': state.edit=null;go('record');break;

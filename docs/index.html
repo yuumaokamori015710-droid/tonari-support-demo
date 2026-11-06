@@ -3,43 +3,41 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#142e4f">
+  <meta name="theme-color" content="#fbfaf6">
+  <meta name="color-scheme" content="only light">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="description" content="となりは、帰宅支援や相談の準備を試せる体験版です。実際の通報・送信・手配は行いません。">
   <title>となり｜帰宅・移動サポート（体験版）</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 44'%3E%3Crect width='44' height='44' rx='9' fill='%23142f50'/%3E%3Cg fill='none' stroke-width='4'%3E%3Cpath d='M5 32V21a11 11 0 0 1 22 0v11' stroke='%23e4c58c'/%3E%3Cpath d='M17 32V21a11 11 0 0 1 22 0v11' stroke='white'/%3E%3C/g%3E%3C/svg%3E">
-  <link rel="stylesheet" href="./style.css?v=20261107b">
-  <script defer src="./core.js?v=20261107b"></script>
-  <script defer src="./app.js?v=20261107b"></script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 44'%3E%3Crect width='44' height='44' rx='10' fill='%23f2f6ed'/%3E%3Cg fill='none' stroke-width='4.5' stroke-linecap='round'%3E%3Cpath d='M5 32V21a11 11 0 0 1 22 0v11' stroke='%2389a98e'/%3E%3Cpath d='M17 32V21a11 11 0 0 1 22 0v11' stroke='%232e6857'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./style.css?v=light-home-1">
+  <script defer src="./core.js?v=light-home-1"></script>
+  <script defer src="./app.js?v=light-home-1"></script>
 </head>
 <body>
-<div id="shell">
+<div id="shell" class="on-home">
   <a href="#app" class="skip-link" id="skip">本文へ移動</a>
   <div class="site-head">
   <header class="mast">
     <div class="mast-inner">
-      <a href="#home" class="brand" aria-label="となり ホーム">
-        <svg class="brand-symbol" viewBox="0 0 44 44" aria-hidden="true" fill="none">
-          <path d="M5 32V21a11 11 0 0 1 22 0v11" stroke="#e4c58c" stroke-width="4.4"/>
-          <path d="M17 32V21a11 11 0 0 1 22 0v11" stroke="#fff" stroke-width="4.4"/>
-        </svg>
-        <span class="wordmark">となり</span>
-        <span class="brand-description">帰宅・移動サポート</span>
-      </a>
-      <div class="mast-tools">
-        <button type="button" class="mast-button guide-button" data-action="guide" aria-label="利用案内">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 0 1 6 0c0 2.2-3 2.5-3 5m0 2v1"/></svg><span>利用案内</span>
-        </button>
-        <button type="button" id="quick-exit" class="mast-button veil-button" data-action="hide">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="m3 3 18 18M9.5 5.7c.8-.2 1.7-.3 2.5-.3 5.8 0 9.4 6.6 9.4 6.6a18 18 0 0 1-3.1 3.8M6.3 7.2A19 19 0 0 0 2.6 12s3.6 6.6 9.4 6.6c1.7 0 3.1-.4 4.3-1.1M10.1 10.2a2.7 2.7 0 0 0 3.7 3.7"/></svg><span>画面を隠す</span>
-        </button>
+      <div class="identity">
+        <a href="#home" class="brand" aria-label="となり ホーム">
+          <svg class="brand-symbol" viewBox="0 0 44 44" aria-hidden="true" fill="none" stroke-linecap="round">
+            <path d="M5 32V21a11 11 0 0 1 22 0v11" stroke="#89a98e" stroke-width="4.5"/>
+            <path d="M17 32V21a11 11 0 0 1 22 0v11" stroke="#2e6857" stroke-width="4.5"/>
+          </svg>
+          <span class="wordmark">となり</span>
+        </a>
+        <span class="edition">体験版</span>
       </div>
+      <button type="button" id="quick-exit" class="mast-button" data-action="hide">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="m3 3 18 18M9.5 5.7c.8-.2 1.7-.3 2.5-.3 5.8 0 9.4 6.6 9.4 6.6a18 18 0 0 1-3.1 3.8M6.3 7.2A19 19 0 0 0 2.6 12s3.6 6.6 9.4 6.6c1.7 0 3.1-.4 4.3-1.1M10.1 10.2a2.7 2.7 0 0 0 3.7 3.7"/></svg><span>画面を隠す</span>
+      </button>
     </div>
   </header>
-  <nav id="nav" aria-label="メインナビゲーション"></nav>
+  <nav id="nav" aria-label="メインナビゲーション" hidden></nav>
   </div>
-  <div class="demo-strip"><div><strong>体験版</strong><span>実際の通報・共有・手配は行いません。</span></div></div>
+  <div class="demo-strip"><div>実際の通報・共有・手配は行いません。</div></div>
   <main id="app" tabindex="-1"></main>
   <noscript><p>この体験版の操作にはJavaScriptが必要です。このページから発信はできません。緊急の場合は電話アプリから110番へ。</p></noscript>
   <footer class="site-footer">
