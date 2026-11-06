@@ -1,0 +1,6 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const T=require('./docs/core.js');
+test('順番通りに到着し、終了後は更新不可',()=>{const r={status:T.statuses[0],history:[]};for(const next of T.statuses.slice(1,8))T.transition(r,next);assert.equal(r.status,'到着済み');assert.deepEqual(T.allowed(r.status),[]);assert.throws(()=>T.transition(r,'手配不成立','理由'));});
+test('飛び越しは禁止、各途中状態から不成立にでき理由が必須',()=>{assert.throws(()=>T.transition({status:T.statuses[0],history:[]},T.statuses[3]));for(const s of T.statuses.slice(0,7)){const r={status:s,history:[]};assert.throws(()=>T.transition(r,'手配不成立',' '));T.transition(r,'手配不成立','担当者なし');assert.equal(r.history[0].reason,'担当者なし');assert.deepEqual(T.allowed(r.status),[]);}});
+test('リスクは未選択判定なし、複数時に高い値を優先',()=>{assert.equal(T.risk([]),0);assert.equal(T.risk(['unease']),1);assert.equal(T.risk(['unease','following']),2);assert.equal(T.risk(['unease','following','threat']),3);});
+test('レポートは時系列、回数不明を推測せず件数と区別',()=>{const records=[{date:'2026-09-27T12:00',content:'B',count:'2',level:'2'},{date:'2026-09-26T12:00',content:'A',count:'',level:'1'}];const out=T.report(records,'警察');assert.ok(out.includes('記録件数：2件'));assert.ok(out.includes('合計：2回／回数不明の記録：1件'));assert.ok(out.includes('誰が（相手情報）：未記入・不明'));assert.ok(out.indexOf('入力内容）：A')<out.indexOf('入力内容）：B'));assert.equal(records[0].content,'B');});
+
