@@ -53,7 +53,93 @@
       '未記入の情報は推測で補っていません。'
     ].join('\n');
   }
-  const api={statuses,riskNames,fields,now,levelText,allowed,transition,risk,disclosure,report};
+  // Distances belong only to this fictional walking map. Coordinates draw its diagram.
+  const walkNodes = {
+    station:{name:'駅前広場',x:42,y:91},
+    plaza:{name:'けやき交差点',x:130,y:91},
+    arcade:{name:'商店街入口',x:215,y:91},
+    east:{name:'東通り角',x:302,y:91},
+    park:{name:'公園入口',x:302,y:150},
+    westBox:{name:'駅前交番',x:42,y:35,kind:'police'},
+    eastBox:{name:'公園通り交番',x:302,y:35,kind:'police'},
+    plazaShop:{name:'広場前ストア',x:130,y:35,kind:'shop',allDay:true},
+    parkShop:{name:'公園前ストア',x:215,y:150,kind:'shop',allDay:true},
+    dayShop:{name:'駅前青果店',x:42,y:150,kind:'shop',allDay:false}
+  };
+  const walkOrigins = ['station','arcade','park'];
+  const walkStreets = [
+    ['station','westBox',70], ['station','plaza',60], ['station','dayShop',20],
+    ['westBox','plazaShop',135], ['plaza','plazaShop',35], ['plaza','arcade',85],
+    ['plazaShop','eastBox',170], ['arcade','east',75], ['arcade','parkShop',55],
+    ['east','eastBox',40], ['east','park',50], ['park','parkShop',45],
+    ['dayShop','parkShop',215]
+  ];
+  const neighbors = Object.fromEntries(Object.keys(walkNodes).map(key=>[key,[]]));
+  for(const [from,to,meters] of walkStreets) {
+    neighbors[from].push({to,meters});
+    neighbors[to].push({to:from,meters});
+  }
+
+  function nearestWalk(origin,kind) {
+    if(!Object.hasOwn(walkNodes,origin) || !['shop','police'].includes(kind)) return null;
+    const distance=new Map([[origin,0]]);
+    const previous=new Map();
+    const pending=new Set(Object.keys(walkNodes));
+    while(pending.size) {
+      let next;
+      let nearest=Infinity;
+      for(const id of pending) {
+        const meters=distance.get(id)??Infinity;
+        if(meters<nearest) { nearest=meters; next=id; }
+      }
+      if(next===undefined) break;
+      const node=walkNodes[next];
+      if(node.kind===kind && (kind!=='shop' || node.allDay===true)) {
+        const segments=[];
+        for(let id=next; id!==origin;) {
+          const edge=previous.get(id);
+          segments.unshift({from:edge.from,to:id,meters:edge.meters});
+          id=edge.from;
+        }
+        return {origin,destination:next,meters:nearest,segments};
+      }
+      pending.delete(next);
+      for(const edge of neighbors[next]) {
+        if(!pending.has(edge.to)) continue;
+        const candidate=nearest+edge.meters;
+        if(candidate<(distance.get(edge.to)??Infinity)) {
+          distance.set(edge.to,candidate);
+          previous.set(edge.to,{from:next,meters:edge.meters});
+        }
+      }
+    }
+    return null;
+  }
+
+  const helpMessages = {
+    call:'今、ひとりで帰るのが不安です。電話してもらえますか。',
+    meet:'今、ひとりで帰るのが不安です。合流できるか相談したいです。'
+  };
+  function beginSos(log,origin,time=now()) {
+    const last=log.at(-1);
+    if(last && !last.endedAt) return last;
+    if(!walkOrigins.includes(origin)) throw Error('架空の出発地点を選んでください。');
+    const event={
+      time, endedAt:null, buzzerOn:true,
+      call:{number:'110',status:'未発信'},
+      location:{origin,name:walkNodes[origin].name,time},
+      notification:{recipient:'友人（デモ連絡先）',message:helpMessages.call,status:'未送信'}
+    };
+    log.push(event);
+    return event;
+  }
+  function endSos(event,time=now()) {
+    if(!event || event.endedAt) return;
+    event.buzzerOn=false;
+    event.endedAt=time;
+  }
+  const api={statuses,riskNames,fields,now,levelText,allowed,transition,risk,disclosure,report,
+    walkNodes,walkOrigins,walkStreets,nearestWalk,helpMessages,beginSos,endSos};
   root.Tonari=api;
   if(typeof module!=='undefined') module.exports=api;
 })(globalThis);

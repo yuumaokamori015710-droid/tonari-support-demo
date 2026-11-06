@@ -7,11 +7,12 @@ const dlg = $('#dialog');
 const cover = $('#cover');
 const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const blankDraft = () => ({situation:'',method:'',fields:[],values:{}});
-const state = {records:[], requests:[], step:1, draft:blankDraft(), active:null, edit:null, signs:[], buzzer:false, reportTo:'警察'};
+const state = {records:[], requests:[], step:1, draft:blankDraft(), active:null, edit:null, signs:[], buzzer:false, reportTo:'警察',
+  sosLog:[], walkOrigin:T.walkOrigins[0], walkKind:'shop'};
 const methods = ['友人/家族と合流','タクシー移動','警備会社への同行相談','安全地点で待機','学校/職場に共有'];
 const situations = ['帰り道に不安・違和感がある','つきまとい・待ち伏せがある','脅し・接近など、切迫した危険がある','うまく説明できない・その他'];
 const stages = ['状況','支援方法','共有範囲','内容確認'];
-const sections = {home:'ホーム',menu:'その他のメニュー',support:'帰宅サポート',emergency:'緊急案内',status:'依頼状況',staff:'支援担当デモ',records:'被害記録',record:'記録の入力',report:'相談レポート',risk:'状況の整理'};
+const sections = {home:'ホーム',menu:'その他のメニュー',support:'帰宅サポート',emergency:'緊急案内',sos:'SOSデモ',help:'個別に助けを求める',places:'近くの待機先',soslog:'SOSの操作履歴',status:'依頼状況',staff:'支援担当デモ',records:'被害記録',record:'記録の入力',report:'相談レポート',risk:'状況の整理'};
 const icons = {
   home:'<path d="m3 10 9-7 9 7v10h-6v-6H9v6H3z"/>',
   support:'<circle cx="8.3" cy="8.2" r="3.3"/><path d="M2.5 20v-1.5a5.8 5.8 0 0 1 11.6 0V20M15 5.3a3.25 3.25 0 1 1 0 6.4m1.2 2.7a5.6 5.6 0 0 1 5.3 5.6"/>',
@@ -44,6 +45,8 @@ const button=(label,action,cls='primary',attrs='')=>`<button type="button" class
 const link=(label,route,cls='secondary')=>`<a href="#${route}" class="${cls}">${label}</a>`;
 const stamp=()=> crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 const current=()=>state.requests.find(r=>r.id===state.active)||state.requests.at(-1);
+const activeSos=()=>state.sosLog.at(-1)?.endedAt ? null : state.sosLog.at(-1);
+const buzzerIsOn=()=>activeSos()?.buzzerOn ?? state.buzzer;
 const optional='<span class="field-tag">任意</span>';
 const required='<span class="field-tag required">必須</span>';
 const notice=(text,kind='info')=>`<div class="notice ${kind}">${ico(kind==='warning'?'emergency':'info')}<p>${text}</p></div>`;
@@ -54,16 +57,18 @@ function nav(route) {
   const navigation=$('#nav');
   navigation.hidden=route==='home';
   shell.classList.toggle('on-home',navigation.hidden);
-  const items=[['home','ホーム'],['emergency','いま危ない'],['menu','メニュー']];
-  navigation.innerHTML=`<div class="nav-inner">${items.map(([k,v])=>`<a href="#${k}" class="nav-item nav-${k}" ${k===route?'aria-current="page"':''}>${ico(k)}<span>${v}</span></a>`).join('')}</div>`;
+  const tab=(key,label)=>`<a href="#${key}" class="nav-item" ${key===route?'aria-current="page"':''}>${ico(key)}<span>${label}</span></a>`;
+  navigation.innerHTML=`<div class="nav-inner">${tab('home','ホーム')}
+    ${button(ico('emergency')+'<span>いま危ない</span>','start-sos','nav-item nav-emergency',route==='sos'?'aria-current="page"':'')}
+    ${tab('menu','メニュー')}</div>`;
 }
 function render() {
   const hash=location.hash.slice(1);
   const route=Object.hasOwn(sections,hash)?hash:'home';
   nav(route);
-  state.buzzer=false;
+  if(route!=='emergency') state.buzzer=false;
   app.dataset.route=route;
-  app.innerHTML=({home,menu,emergency,support,status,staff,records,record:recordForm,report:reportPage,risk:riskPage})[route]();
+  app.innerHTML=({home,menu,emergency,sos,help,places,soslog,support,status,staff,records,record:recordForm,report:reportPage,risk:riskPage})[route]();
   if(cover.hidden) {
     document.title=`${sections[route]}｜となり（体験版）`;
     app.focus({preventScroll:true}); window.scrollTo(0,0);
@@ -84,7 +89,9 @@ function modal(label,html) {
 }
 function guide() {
   modal('体験版と情報の取り扱い',`<p>「となり」は、ひとりで帰るのが不安なときの選択肢と、相談の準備を確認できる体験版です。</p>
-    <ul class="plain-list"><li><b>いま危ない</b>　110番のかけ方や、人に助けを求めて待機する方法を確認できます。</li>
+    <ul class="plain-list"><li><b>いま危ない</b>　無音のブザー、110番の案内、架空の位置記録、友人への通知文を1回で準備します。実際の緊急通報はご自身の電話から110番へ。</li>
+    <li><b>個別に助けを求める</b>　友人・家族への文面や、近くの人に見せる言葉を選べます。</li>
+    <li><b>近くの待機先を探す</b>　架空の地図で交番・24時間営業の店への徒歩経路を確認します。</li>
     <li><b>帰宅サポートを使う</b>　合流・タクシー・同行相談・待機などを選び、デモの依頼を作れます。</li>
     <li><b>記録する</b>　起きたことを入力し、警察・弁護士・学校・職場に相談するためのレポートを作れます。</li></ul>
     ${rows([['利用目的','架空の情報での操作体験'],['入力の保存先','開いているタブ内。再読み込み・終了で消去'],['担当画面','同じタブ内のデモ画面。実際の担当者への通知なし'],['外部連携','通報・配車・同行手配・位置情報送信は行いません']])}
@@ -98,12 +105,14 @@ function home() {
      ${ico('arrow')}`;
   return `<h1 class="home-heading">帰り道が不安なときに</h1>
     <div class="home-actions">
-      ${link(action('phone','いま危ない','110番のかけ方・待機先を確認'),'emergency','home-action action-urgent')}
-      ${link(action('support','帰宅サポートを使う','合流する相手や移動手段を選ぶ'),'support','home-action action-support')}
-      ${button(action('records','記録する','起きたことをメモして相談に備える'),'new-record','home-action action-record')}
+      ${button(action('sound','いま危ない <span class="sos-tag">一括SOSデモ</span>',activeSos()?'進行中のSOSデモを表示':'ブザー・110番・位置記録・友人通知'),'start-sos','home-action action-urgent')}
+      ${link(action('support','個別に助けを求める','友人・家族や、近くにいる人へ'),'help','home-action action-support')}
+      ${link(action('pin','近くの待機先を探す','交番・24時間営業の店への経路デモ'),'places','home-action action-places')}
     </div>
-    <p class="home-demo">${ico('info')}<span>体験版では、実際の通報・共有・手配は行いません。</span></p>
-    <div class="home-more">${link(`${ico('menu')} その他のメニュー ${ico('arrow')}`,'menu','more-link')}</div>`;
+    <p class="home-demo">${ico('info')}<span>発信・送信はしません。緊急時は電話で110番へ。</span></p>
+    <div class="home-more home-shortcuts">${link(ico('support')+' 帰宅サポートを使う','support','more-link')}
+      ${button(ico('records')+' 記録する','new-record','more-link')}
+      ${link(ico('menu')+' その他のメニュー','menu','more-link')}</div>`;
 }
 function menu() {
   const row = (icon, label, detail) =>
@@ -111,6 +120,7 @@ function menu() {
   return `${title('その他のメニュー')}
     <div class="menu-groups">
       <section><h2 class="section-title">依頼と記録</h2><div class="menu-panel">
+        ${link(row('pin','SOSの操作履歴を見る','デモの時刻・架空の地点'),'soslog','menu-line')}
         ${link(row('status','依頼状況を見る','デモ依頼の進み具合・共有内容'),'status','menu-line')}
         ${link(row('records','記録一覧を見る','記録を見返す・編集する'),'records','menu-line')}
       </div></section>
@@ -119,6 +129,7 @@ function menu() {
         ${link(row('report','相談レポートを作る','警察・弁護士・学校・職場への相談用'),'report','menu-line')}
       </div></section>
       <section><h2 class="section-title">体験版について</h2><div class="menu-panel">
+        ${link(row('phone','個別の緊急操作','110番の案内・ブザー・共有デモ'),'emergency','menu-line')}
         ${button(row('guide','利用案内','このアプリでできること・情報の取り扱い'),'guide','menu-line')}
         ${link(row('staff','支援担当デモを開く','依頼の確認・ステータスの更新'),'staff','menu-line')}
       </div></section>
@@ -130,12 +141,89 @@ function emergency() {
     <section class="panel emergency-lead"><div class="label danger-text">${ico('phone')} 緊急時の連絡</div>
       <h2>電話アプリから <span class="dial-number">110</span> 番へ</h2><p>この体験版からは発信できません。実際の緊急通報には、ご自身の電話をお使いください。</p>
       ${button(`110番の発信手順を見る ${ico('arrow')}`,'call','danger-btn')}</section>
-    <div class="two-col"><section class="panel"><h2 class="panel-title">助けを求めて待機する</h2><p>無理に帰宅を続けず、駅の窓口や交番など、人に助けを求められる場所での待機を検討してください。</p><p class="muted">施設の営業・人員・受け入れ状況は確認していません。</p>${link('待機・合流を相談する','support','secondary')}</section>
+    <div class="two-col"><section class="panel"><h2 class="panel-title">助けを求めて待機する</h2><p>無理に帰宅を続けず、駅の窓口や交番など、人に助けを求められる場所での待機を検討してください。</p><p class="muted">施設の営業・人員・受け入れ状況は確認していません。</p><div class="row">${link('近くの待機先を探す','places','secondary')}${link('待機・合流を相談する','support','secondary')}</div></section>
     <section><h2 class="section-title">緊急操作のデモ</h2><div class="menu-panel">${actionRow('person','緊急連絡先共有デモ','送信前の文面を確認','contact')}${actionRow('pin','現在地共有デモ','架空の場所を表示','location')}
-      <div class="buzzer" id="buzzer-card">${button(`<span class="line-icon">${ico('sound')}</span><span><b id="buzzer-label">防犯ブザー風デモを開始</b><small>無音・振動なしの動作表示</small></span>${ico('arrow')}`,'buzzer','menu-line','aria-pressed="false"')}<p id="buzzer-status" role="status" hidden></p></div></div></section></div>
+      <div class="buzzer" id="buzzer-card">${button(`<span class="line-icon">${ico('sound')}</span><span><b id="buzzer-label">${buzzerIsOn()?'ブザー表示を停止':'防犯ブザー風デモを開始'}</b><small>無音・振動なしの動作表示</small></span>${ico('arrow')}`,'buzzer','menu-line',`aria-pressed="${buzzerIsOn()}"`)}<p id="buzzer-status" role="status" hidden></p></div></div></section></div>
     <div class="panel consultation-note"><h2 class="panel-title">緊急でない警察への相談</h2><p>警察相談専用電話 <b>#9110</b> または最寄りの警察署へ。<a href="https://www.npa.go.jp/goiken_index.html" target="_blank" rel="noopener noreferrer">警察庁の案内（外部サイト）</a></p></div>`;
 }
 
+function sos() {
+  const event=state.sosLog.at(-1);
+  if(!event) return title('SOSデモ')+empty('sound','開始するにはボタンを押してください',
+    'ブザー・110番・架空の位置記録・友人への通知をまとめて試せます。',
+    button('いま危ない · SOSデモを開始','start-sos','danger-btn'));
+  const row=(icon,label,value,note,control='')=>`<li class="sos-row">
+    <span class="line-icon">${ico(icon)}</span><div><h2>${label}</h2><p>${value}</p>
+    <small>${note}</small>${control}</div></li>`;
+  const buzzerText=event.buzzerOn?'無音のデモ表示中':'表示を停止しました';
+  const toggle=event.endedAt?'':button(event.buzzerOn?'ブザー表示を停止':'ブザー表示を再開','buzzer','sos-small',`aria-pressed="${event.buzzerOn}"`);
+  return `${title(event.endedAt?'SOSデモを終了しました':'SOSデモの操作結果','実際に通報する場合は、電話アプリから110番へ。')}
+    <div class="sos-wrap"><ul class="panel sos-list">
+      ${row('sound','防犯ブザー',`<span id="sos-buzzer-label" role="status">${buzzerText}</span>`,'音・振動は出ません。',toggle)}
+      ${row('phone',esc(event.call.number)+'番通報',esc(event.call.status),'この画面からは発信しません。',button('110番のかけ方','call','sos-small'))}
+      ${row('pin','位置の記録',`${esc(event.location.name)}（架空）`,`このタブに記録 · ${esc(event.location.time)}（日本時間）`)}
+      ${row('person','友人への通知',esc(event.notification.status),`宛先：${esc(event.notification.recipient)}`,`<blockquote class="message-quote">${esc(event.notification.message)}</blockquote>`)}
+    </ul>
+    <div class="stack-buttons sos-next">${button('記録した地点の近くを探す','sos-places','primary')}
+    ${link('個別に助けを求める','help','secondary')}
+    ${event.endedAt?link('SOSの操作履歴を見る','soslog','secondary'):button('SOSデモを終了する','end-sos','quiet')}</div></div>`;
+}
+function soslog() {
+  const heading=title('SOSの操作履歴','このタブでSOSを押した時刻と架空の地点です。再読み込みで消えます。');
+  if(!state.sosLog.length) return heading+empty('pin','SOSの操作履歴はまだありません','ボタンを押したときだけ、このタブにデモの記録が残ります。',link('ホームへ','home','secondary'));
+  return `${heading}<div class="sos-wrap">${[...state.sosLog].reverse().map(event=>`<article class="panel">
+    <h2 class="panel-title">${esc(event.location.name)}（架空）</h2>
+    ${rows([['開始（日本時間）',event.time],['終了（日本時間）',event.endedAt||'デモ進行中'],['110番・友人通知','未発信・未送信']])}
+    ${!event.endedAt?link('進行中のSOSデモを見る','sos','text-link'):''}</article>`).join('')}</div>`;
+}
+function help() {
+  const item=(icon,label,hint,action)=>button(`<span class="line-icon">${ico(icon)}</span>
+    <span><b>${label}</b><small>${hint}</small></span>${ico('arrow')}`,action,'menu-line');
+  return `${title('個別に助けを求める','今、使いたい方法をひとつ選んでください。')}
+    <div class="sos-wrap"><div class="menu-panel">
+      ${item('person','友人・家族への文面を用意','電話してほしい・合流したい','friend-help')}
+      ${item('guide','近くの人・店員に画面を見せる','声を出しにくいときに','show-help')}
+      ${item('phone','110番のかけ方','実際の緊急通報は電話アプリから','call')}
+    </div><div class="stack-buttons sos-next">
+    ${link('帰宅サポートを使う','support','secondary')}
+    ${link('緊急案内・個別の操作デモへ','emergency','text-link')}</div></div>`;
+}
+
+function walkMap(route) {
+  const nodes=T.walkNodes;
+  const roads=T.walkStreets.map(([from,to])=>`M${nodes[from].x} ${nodes[from].y} L${nodes[to].x} ${nodes[to].y}`).join(' ');
+  const stops=[route.origin,...route.segments.map(segment=>segment.to)];
+  const path=stops.map(id=>`${nodes[id].x},${nodes[id].y}`).join(' ');
+  const marker=(id,label,offset)=>`<g><circle class="map-stop" cx="${nodes[id].x}" cy="${nodes[id].y}" r="7"/>
+    <text x="${nodes[id].x}" y="${nodes[id].y+offset}">${label}</text></g>`;
+  return `<svg class="walk-map" viewBox="0 0 345 184" aria-hidden="true" focusable="false">
+    <path class="map-road-edge" d="${roads}"/><path class="map-road" d="${roads}"/>
+    <polyline class="map-route" points="${path}"/>
+    ${marker(route.origin,'出発',23)}${marker(route.destination,'目的地',-13)}</svg>`;
+}
+function walkResult(route) {
+  if(!route) return '<p class="notice">この条件の徒歩経路は見つかりませんでした。</p>';
+  const name=id=>esc(T.walkNodes[id].name);
+  const segmentItem=(segment,index)=>{
+    const from=T.walkNodes[segment.from],to=T.walkNodes[segment.to];
+    const direction=from.x===to.x ? (to.y<from.y?'北':'南') : (to.x<from.x?'西':'東');
+    return `<li><b>${name(segment.to)}</b><span>${direction}へ ${segment.meters} m${index===route.segments.length-1?' · 目的地':''}</span></li>`;
+  };
+  return `<div class="walk-result-head"><div><div class="label">最寄りの候補（架空）</div><h2>${name(route.destination)}</h2></div>
+    <span class="walk-distance">徒歩 <strong>${route.meters}</strong> m</span></div>
+    <figure class="walk-figure">${walkMap(route)}<figcaption>架空の徒歩地図 · 上が北</figcaption></figure>
+    <h3>最短の徒歩経路</h3><ol class="walk-steps"><li><b>${name(route.origin)}</b><span>出発</span></li>
+      ${route.segments.map(segmentItem).join('')}</ol>`;
+}
+function places() {
+  const route=T.nearestWalk(state.walkOrigin,state.walkKind);
+  return `${title('近くの待機先を探す','架空の街の徒歩経路を試せます。実際の道案内には使えません。')}
+    <div class="walk-layout"><section class="panel"><h2 class="panel-title">経路の条件</h2>
+    <label class="field">出発地点（架空）<select id="walk-origin">${T.walkOrigins.map(id=>`<option value="${id}" ${id===state.walkOrigin?'selected':''}>${esc(T.walkNodes[id].name)}</option>`).join('')}</select></label>
+    <fieldset class="walk-kind"><legend>探す場所</legend><div class="walk-options">${[['shop','24時間営業の店'],['police','交番']].map(([value,label])=>`<label class="choice"><input type="radio" name="walk-kind" value="${value}" ${value===state.walkKind?'checked':''}><span>${label}</span></label>`).join('')}</div></fieldset>
+    <p class="hint">距離と営業時間はデモの設定です。実在の店舗の営業状況・交番の在所状況・道の様子は確認していません。</p></section>
+    <section class="panel" aria-label="徒歩経路"><div id="walk-result">${walkResult(route)}</div><span id="walk-announcement" class="sr-only" role="status"></span></section></div>`;
+}
 function stepRail() {
   return `<div class="step-rail"><div class="rail-heading">手続きの流れ</div><ol class="steps" aria-label="手続きの進捗">${stages.map((s,i)=>{
     const n=i+1,done=n<state.step;
@@ -205,7 +293,7 @@ function status() {
     <div class="receipt-stub"><span>照会番号</span><strong>${esc(r.id.slice(0,8).toUpperCase())}</strong><small>最終更新（日本時間） <br>${esc(r.history.at(-1).time)}</small></div></section>
     <div class="detail-layout"><section class="panel"><h2 class="panel-title">依頼明細</h2>${requestBasics(r)}${disclosureView(r)}</section>
     <div><section class="panel"><h2 class="panel-title">更新履歴 <span class="tag">${r.history.length}件</span></h2>${history(r)}<details class="flow-details"><summary>ステータスの流れを見る</summary><ol>${T.statuses.slice(0,8).map(s=>`<li>${s}</li>`).join('')}</ol><p class="muted">途中で手配不成立になる場合もあります。</p></details></section>
-    <div class="panel"><h2 class="panel-title">次の操作</h2><div class="stack-buttons">${link('支援担当デモを開く','staff','secondary')}${button('別の支援を相談する','new-support','secondary')}${link('いま危ない','emergency','danger-outline')}</div></div></div></div>`;
+    <div class="panel"><h2 class="panel-title">次の操作</h2><div class="stack-buttons">${link('支援担当デモを開く','staff','secondary')}${button('別の支援を相談する','new-support','secondary')}${button('いま危ない · SOSデモ','start-sos','danger-outline')}</div></div></div></div>`;
 }
 function staff() {
   const r=current();
@@ -257,7 +345,7 @@ function riskPage() {
   return `${title('気になる状況を整理','当てはまるものを選ぶと、次の行動を考えるための目安を表示します。')}
     <div class="two-col"><section class="panel"><fieldset><legend>当てはまる状況</legend><p class="muted">複数選択できます。未選択では判定しません。</p><div class="choice-list">
     ${[['unease','不安・違和感がある'],['following','繰り返しつきまとい・待ち伏せがある'],['threat','脅し・身体への危害・侵入がある']].map(([v,s])=>`<label class="choice"><input type="checkbox" name="risk" value="${v}" ${state.signs.includes(v)?'checked':''}><span>${s}</span></label>`).join('')}</div></fieldset></section>
-    <section class="panel risk-output"><div id="risk-result" aria-live="polite">${riskResult()}</div><div class="stack-buttons">${link('いま危ない','emergency','danger-outline')}${link('帰宅サポートを使う','support','primary')}</div></section></div>`;
+    <section class="panel risk-output"><div id="risk-result" aria-live="polite">${riskResult()}</div><div class="stack-buttons">${button('いま危ない · SOSデモ','start-sos','danger-outline')}${link('帰宅サポートを使う','support','primary')}</div></section></div>`;
 }
 
 function saveDraft() {
@@ -303,6 +391,14 @@ document.addEventListener('change',ev=>{
     if(!failed) {el.form.elements.reason.value='';el.form.elements.reason.setCustomValidity('');}
   }
   if(el.id==='request-picker') {state.active=el.value;render();}
+  if(el.id==='help-intent') $('#help-message').value=T.helpMessages[el.value];
+  if(el.id==='walk-origin' || el.name==='walk-kind') {
+    if(el.id==='walk-origin') state.walkOrigin=el.value;
+    else state.walkKind=el.value;
+    const route=T.nearestWalk(state.walkOrigin,state.walkKind);
+    $('#walk-result').innerHTML=walkResult(route);
+    $('#walk-announcement').textContent=route?`${T.walkNodes[route.destination].name}まで徒歩${route.meters}メートル（架空）`:'経路は見つかりませんでした。';
+  }
   if(el.id==='report-target') {
     state.reportTo=el.value; $('#report-text').textContent=T.report(state.records,state.reportTo);
   }
@@ -359,6 +455,26 @@ document.addEventListener('click',ev=>{
   const b=ev.target.closest('[data-action]');
   if(!b) return;
   switch(b.dataset.action) {
+    case 'start-sos':
+      T.beginSos(state.sosLog,state.walkOrigin);
+      state.buzzer=false;
+      go('sos');break;
+    case 'end-sos':
+      T.endSos(activeSos());
+      state.buzzer=false;render();break;
+    case 'sos-places': {
+      const event=state.sosLog.at(-1);
+      if(event) state.walkOrigin=event.location.origin;
+      go('places');break;
+    }
+    case 'friend-help':
+      modal('友人・家族への文面',`<label class="field">お願いしたいこと<select id="help-intent"><option value="call">電話してほしい</option><option value="meet">合流したい</option></select></label>
+        <label class="field">連絡に使う文面<textarea id="help-message" readonly>${esc(T.helpMessages.call)}</textarea></label>
+        ${button('文面を選択する','select-message','secondary')}<p class="hint">未送信です。必要に応じて文面をコピーし、普段の連絡手段でお使いください。</p>`);break;
+    case 'select-message':
+      $('#help-message').focus();$('#help-message').select();break;
+    case 'show-help':
+      modal('近くの人に見せる画面','<p class="help-card">助けてください。<br>ひとりで帰るのが不安です。<br>ここで一緒に待っていただけますか。</p>');break;
     case 'guide': guide();break;
     case 'hide': showHiddenScreen();break;
     case 'dismiss': dlg.close();break;
@@ -376,13 +492,22 @@ document.addEventListener('click',ev=>{
     case 'contact':
       modal('緊急連絡先共有デモ',`<p class="tag">プレビューのみ・未送信</p>${rows([['宛先','架空の連絡先'],['文面','いま帰宅に不安があります。電話や合流の相談をしたいです。']])}<p class="muted">連絡先にはアクセスしていません。実際の連絡には普段の連絡手段をお使いください。</p>`);break;
     case 'location':
-      modal('現在地共有デモ',`<p class="tag">架空の場所・未送信</p>${rows([['表示例','デモ駅の有人窓口付近']])}<p>端末の位置情報は取得・追跡・送信していません。</p>`);break;
+      modal('現在地共有デモ',`<p class="tag">架空の場所・未送信</p>${rows([['架空の地点',T.walkNodes[state.walkOrigin].name]])}<p>端末の位置情報は取得・追跡・送信していません。</p>`);break;
     case 'buzzer': {
-      state.buzzer=!state.buzzer;
-      b.setAttribute('aria-pressed',String(state.buzzer));
-      $('#buzzer-label').textContent=state.buzzer?'ブザー表示を停止':'防犯ブザー風デモを開始';
-      $('#buzzer-status').hidden=false;
-      $('#buzzer-status').textContent=state.buzzer?'デモ表示中です。音・振動は出ません。':'停止しました。';break;
+      const running=activeSos();
+      const on=!buzzerIsOn();
+      if(running) running.buzzerOn=on;
+      else state.buzzer=on;
+      b.setAttribute('aria-pressed',String(on));
+      if(app.dataset.route==='sos') {
+        b.textContent=on?'ブザー表示を停止':'ブザー表示を再開';
+        $('#sos-buzzer-label').textContent=on?'無音のデモ表示中':'表示を停止しました';
+      } else {
+        $('#buzzer-label').textContent=on?'ブザー表示を停止':'防犯ブザー風デモを開始';
+        $('#buzzer-status').hidden=false;
+        $('#buzzer-status').textContent=on?'デモ表示中です。音・振動は出ません。':'停止しました。';
+      }
+      break;
     }
     case 'download-report':
       modal('レポートの保存',`<p>全${state.records.length}件の内容・相手情報・証拠メモなどを含むテキストを、この端末に保存します。保存したファイルは、タブを閉じても残ります。</p>${button('内容を確認して保存する','confirm-download','primary full')}`);break;

@@ -42,3 +42,66 @@ test('日時・回数・種別・本人の危険度が不明なら、ゼロ回�
   assert.match(out,/種別：未記入・不明/);
   assert.ok(out.indexOf('入力内容）：日付あり')<out.indexOf('入力内容）：日付なし'));
 });
+test('1回のSOSで無音ブザー・110番の案内・架空の位置と時刻・未送信の友人通知が揃う',()=>{
+  const log=[];
+  const event=T.beginSos(log,'park','開始時刻');
+  assert.equal(event.buzzerOn,true);
+  assert.deepEqual(event.call,{number:'110',status:'未発信'});
+  assert.deepEqual(event.location,{origin:'park',name:'公園入口',time:'開始時刻'});
+  assert.equal(event.notification.status,'未送信');
+  assert.match(event.notification.recipient,/友人/);
+  assert.ok(event.notification.message.includes('電話'));
+  assert.ok(!event.notification.message.includes(event.location.name));
+});
+
+test('SOSの連打は重複記録・ブザー再開を起こさず、終了後の明示的な操作で新規開始',()=>{
+  const log=[];
+  const first=T.beginSos(log,'station','A');
+  first.buzzerOn=false;
+  assert.equal(T.beginSos(log,'park','B'),first);
+  assert.equal(first.buzzerOn,false);
+  assert.equal(log.length,1);
+  T.endSos(first,'C');
+  T.endSos(first,'D');
+  const next=T.beginSos(log,'park','E');
+  assert.equal(first.endedAt,'C');
+  assert.equal(first.location.name,'駅前広場');
+  assert.equal(next.location.name,'公園入口');
+  assert.equal(next.buzzerOn,true);
+  assert.equal(log.length,2);
+  T.endSos(next,'F');
+  assert.equal(next.buzzerOn,false);
+  assert.throws(()=>T.beginSos(log,'不明','G'));
+  assert.equal(log.length,2);
+});
+
+test('各出発地点から、徒歩距離が最短の24時間店舗または交番と実在する区間を返す',()=>{
+  const examples=[
+    ['station','shop','plazaShop',95],['station','police','westBox',70],
+    ['arcade','shop','parkShop',55],['arcade','police','eastBox',115],
+    ['park','shop','parkShop',45],['park','police','eastBox',90]
+  ];
+  for(const [origin,kind,destination,meters] of examples) {
+    const route=T.nearestWalk(origin,kind);
+    assert.equal(route.destination,destination);
+    assert.equal(route.meters,meters);
+    assert.equal(route.segments.reduce((sum,edge)=>sum+edge.meters,0),meters);
+    let node=origin;
+    for(const edge of route.segments) {
+      assert.equal(edge.from,node);
+      assert.ok(T.walkStreets.some(([a,b,len])=>len===edge.meters &&
+        ((a===edge.from && b===edge.to)||(b===edge.from && a===edge.to))));
+      node=edge.to;
+    }
+    assert.equal(node,destination);
+  }
+});
+
+test('近くても24時間営業でない店を除き、解けない入力では架空の経路を補わない',()=>{
+  assert.equal(T.walkNodes.dayShop.allDay,false);
+  assert.equal(T.nearestWalk('station','shop').destination,'plazaShop');
+  assert.deepEqual(T.nearestWalk('parkShop','shop').segments,[]);
+  assert.equal(T.nearestWalk('parkShop','shop').meters,0);
+  assert.equal(T.nearestWalk('unknown','shop'),null);
+  assert.equal(T.nearestWalk('park','unknown'),null);
+});
